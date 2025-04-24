@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-md-5 mb-4"> {# Añadido margen inferior para móviles #}
+            <h2>Registrar Nueva Observación</h2>
+            <hr>
+            <form action="{{ url_for('index') }}" method="post" novalidate>
+                {{ obs_form.hidden_tag() }} <div class="mb-3">
+                    {{ obs_form.classification.label(class="form-label") }} {% if obs_form.classification.errors %} {{ obs_form.classification(class="form-select is-invalid") }} <div class="invalid-feedback">
+                            {% for error in obs_form.classification.errors %}<span>{{ error }}</span>{% endfor %} </div>
+                    {% else %}
+                        {{ obs_form.classification(class="form-select") }} {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    {{ obs_form.body.label(class="form-label") }} {% if obs_form.body.errors %} {{ obs_form.body(class="form-control is-invalid", rows=4) }} <div class="invalid-feedback">
+                            {% for error in obs_form.body.errors %}<span>{{ error }}</span>{% endfor %} </div>
+                    {% else %}
+                         {{ obs_form.body(class="form-control", rows=4) }} {% endif %}
+                </div>
+
+                <div>
+                    {{ obs_form.submit(class="btn btn-primary") }} </div>
+            </form>
+        </div>
+
+        <div class="col-md-7">
+            <h2>Historial de Observaciones</h2>
+            <hr>
+
+            <form action="{{ url_for('index') }}" method="get" class="mb-3">
+                <div class="input-group">
+                    {{ search_form.query(class="form-control", placeholder="Buscar por clasificación o descripción...", value=search_query or '') }}
+                    {{ search_form.submit(class="btn btn-outline-secondary") }}
+                     {% if search_query %}
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-danger" title="Limpiar Búsqueda">&times;</a>
+                     {% endif %}
+                </div>
+            </form>
+
+            {% if observations %}
+                <ul class="list-group">
+                    {% for obs in observations %}
+                        <li class="list-group-item mb-2 shadow-sm">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1"><strong>{{ obs.classification }}</strong></h5>
+                                <small class="text-muted">{{ obs.timestamp.strftime('%Y-%m-%d %H:%M') }} UTC</small>
+                            </div>
+                            <p class="mb-1">{{ obs.body }}</p>
+                            <small class="text-muted">Registrado por: {{ obs.author.username }}</small>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                 {% if search_query %}
+                     <p class="text-muted">No se encontraron observaciones para "{{ search_query }}".</p>
+                 {% else %}
+                     <p class="text-muted">No hay observaciones registradas todavía.</p>
+                 {% endif %}
+            {% endif %}
+
+        </div> {# Fin col-md-7 #}
+    </div> {# Fin de .row #}
+
+{% endblock %}
+

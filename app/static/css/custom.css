@@ -1,0 +1,76 @@
+/* app/static/css/custom.css */
+
+/* Definición de variables de color basadas en el logo */
+:root {
+    --primary-green: #6a994e; /* Verde principal de las hojas */
+    --secondary-green: #a7c957; /* Verde más claro de las hojas */
+    --dark-text: #343a40; /* Gris oscuro para texto (similar al 'VIDA') */
+    --light-beige: #f8f5f0; /* Un beige muy claro para el fondo */
+    --bs-link-hover-color: #4e7a3a; /* Un verde más oscuro para hover de enlaces */
+  }
+  
+  /* Aplicar color de fondo general */
+  body.bg-light-beige {
+    background-color: var(--light-beige);
+    color: var(--dark-text); /* Color de texto por defecto */
+  }
+  
+  /* Estilos para la barra de navegación */
+  .navbar.bg-primary-green {
+    background-color: var(--primary-green) !important; /* Sobrescribir Bootstrap */
+  }
+  
+  /* Asegurar contraste en texto y enlaces de la navbar */
+  .navbar.bg-primary-green .navbar-brand,
+  .navbar.bg-primary-green .nav-link,
+  .navbar.bg-primary-green .navbar-text {
+    color: #ffffff; /* Texto blanco para contraste */
+  }
+  
+  .navbar.bg-primary-green .nav-link:hover,
+  .navbar.bg-primary-green .nav-link:focus {
+    color: rgba(255, 255, 255, 0.8); /* Blanco semi-transparente en hover */
+  }
+  
+  /* Estilos para botones principales (ej. submit en formularios) */
+  .btn-primary {
+    background-color: var(--primary-green);
+    border-color: var(--primary-green);
+  }
+  
+  .btn-primary:hover {
+    background-color: var(--bs-link-hover-color); /* Verde más oscuro en hover */
+    border-color: var(--bs-link-hover-color);
+  }
+  
+  /* Estilos para enlaces */
+  a {
+    color: var(--primary-green);
+  }
+  
+  a:hover {
+    color: var(--bs-link-hover-color);
+  }
+  
+  /* Ajustes para mensajes flash (opcional, para que usen nuestros colores) */
+  .alert-success {
+      background-color: #d1e7dd; /* Verde pálido de Bootstrap */
+      border-color: #badbcc;
+      color: #0f5132; /* Texto oscuro para contraste */
+  }
+  
+  .alert-danger {
+      background-color: #f8d7da; /* Rojo pálido de Bootstrap */
+      border-color: #f5c2c7;
+      color: #842029; /* Texto oscuro para contraste */
+  }
+  
+  .alert-info {
+      background-color: #cff4fc; /* Azul pálido de Bootstrap */
+      border-color: #b6effb;
+      color: #055160; /* Texto oscuro para contraste */
+  }
+  
+  /* Puedes añadir más estilos personalizados aquí */
+  
+  

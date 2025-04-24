@@ -1,0 +1,29 @@
+# Entorno virtual
+venv/
+*.pyc
+__pycache__/
+
+# Base de datos SQLite (si no la querés versionar)
+instance/observaciones.db
+# Si usas otro nombre para la carpeta instance o la BD, ajustalo
+
+# Archivos de configuración local (si usas .env)
+.env
+*.env
+
+# Archivos de IDE/Editor
+.vscode/
+.idea/
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de Flask-Migrate (si lo usas, la BD no, pero las migraciones sí)
+# instance/ # Ya está arriba, pero por si acaso
+# migrations/ # ¡OJO! La carpeta migrations SÍ se suele versionar
+
+# Archivos generados por PyInstaller (si lo usaste)
+dist/
+build/
+*.spec
