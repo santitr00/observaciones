@@ -27,3 +27,7 @@ Thumbs.db
 dist/
 build/
 *.spec
+
+# git add .
+# git commit -m "Descripción del nuevo cambio"
+# git push origin master

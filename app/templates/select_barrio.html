@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% import "bootstrap_wtf.html" as wtf %}
+
+{% block content %}
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm">
+                 <div class="card-header text-center bg-primary-green text-white">
+                     <img src="{{ url_for('static', filename='images/index.png') }}" alt="Logo" style="max-height: 50px; margin-bottom: 5px;">
+                     <h4 class="mb-0" style="color: black;">Seleccionar Barrio</h4>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-center">Por favor, selecciona el barrio al que deseas ingresar.</p>
+                    <form method="post" action="{{ url_for('main.select_barrio') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="mb-3">
+                            <label for="barrio" class="form-label">Barrio:</label>
+                            <select class="form-select" id="barrio" name="barrio" required autofocus>
+                                <option value="" selected disabled>-- Elige un barrio --</option>
+                                {% for b in barrios %}
+                                    <option value="{{ b }}">{{ b }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg">Siguiente</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

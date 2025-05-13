@@ -1,67 +1,116 @@
 {% extends "base.html" %}
+{% import "bootstrap_wtf.html" as wtf %}
 
 {% block content %}
+    <div class="alert alert-secondary d-flex justify-content-between align-items-center" role="alert">
+      <span>Barrio Actual: <strong>{{ current_barrio }}</strong></span>
+      <a href="{{ url_for('main.logout') }}" class="btn btn-sm btn-outline-secondary">Cambiar Barrio / Salir</a>
+    </div>
+
     <div class="row">
-        <div class="col-md-5 mb-4"> {# Añadido margen inferior para móviles #}
-            <h2>Registrar Nueva Observación</h2>
+        <div class="col-md-5 mb-4">
+            <h2>Registrar Acta en: {{ target_puesto }}</h2> {# Renombrado a puesto #}
             <hr>
-            <form action="{{ url_for('index') }}" method="post" novalidate>
-                {{ obs_form.hidden_tag() }} <div class="mb-3">
-                    {{ obs_form.classification.label(class="form-label") }} {% if obs_form.classification.errors %} {{ obs_form.classification(class="form-select is-invalid") }} <div class="invalid-feedback">
-                            {% for error in obs_form.classification.errors %}<span>{{ error }}</span>{% endfor %} </div>
-                    {% else %}
-                        {{ obs_form.classification(class="form-select") }} {% endif %}
-                </div>
-
-                <div class="mb-3">
-                    {{ obs_form.body.label(class="form-label") }} {% if obs_form.body.errors %} {{ obs_form.body(class="form-control is-invalid", rows=4) }} <div class="invalid-feedback">
-                            {% for error in obs_form.body.errors %}<span>{{ error }}</span>{% endfor %} </div>
-                    {% else %}
-                         {{ obs_form.body(class="form-control", rows=4) }} {% endif %}
-                </div>
-
-                <div>
-                    {{ obs_form.submit(class="btn btn-primary") }} </div>
+            <form action="{{ url_for('main.index', puesto=target_puesto) }}" method="post" novalidate enctype="multipart/form-data"> {# Renombrado a puesto #}
+                {{ obs_form.hidden_tag() }}
+                {{ wtf.form_field(obs_form.classification) }}
+                {{ wtf.form_field(obs_form.observation_date) }} 
+                {{ wtf.form_field(obs_form.observation_time) }} 
+                {{ wtf.form_field(obs_form.body) }}
+                {{ wtf.form_field(obs_form.attachment) }}
+                {{ wtf.form_field(obs_form.submit) }}
             </form>
         </div>
 
         <div class="col-md-7">
-            <h2>Historial de Observaciones</h2>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                 <h2>Libro de Actas: {{ target_puesto }}</h2> {# Renombrado a puesto #}
+                 {# Menú para cambiar de Puesto (usa lista global PUESTOS) #}
+                 {% if available_puestos and available_puestos|length > 1 %}
+                     <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+                            Ver Puesto
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+                            {% for puesto in available_puestos %} {# Renombrado a puesto #}
+                                <li><a class="dropdown-item {% if puesto == target_puesto %}active{% endif %}" href="{{ url_for('main.index', puesto=puesto) }}">{{ puesto }}</a></li> {# Renombrado a puesto #}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                 {% endif %}
+            </div>
+            <p><small>Barrio: {{ current_barrio }}</small></p>
             <hr>
 
-            <form action="{{ url_for('index') }}" method="get" class="mb-3">
-                <div class="input-group">
-                    {{ search_form.query(class="form-control", placeholder="Buscar por clasificación o descripción...", value=search_query or '') }}
-                    {{ search_form.submit(class="btn btn-outline-secondary") }}
-                     {% if search_query %}
-                        <a href="{{ url_for('index') }}" class="btn btn-outline-danger" title="Limpiar Búsqueda">&times;</a>
+            <form action="{{ url_for('main.index') }}" method="get" class="mb-3 row g-2 align-items-center">
+                 <input type="hidden" name="puesto" value="{{ target_puesto }}"> {# Renombrado a puesto #}
+                 <div class="col-md-4">
+                     {{ search_form.query(class="form-control form-control-sm", placeholder="Buscar texto...", value=search_query or '') }}
+                 </div>
+                 <div class="col-md-3">
+                     {{ search_form.start_date(class="form-control form-control-sm", type="date", placeholder="Desde") }}
+                 </div>
+                  <div class="col-md-3">
+                     {{ search_form.end_date(class="form-control form-control-sm", type="date", placeholder="Hasta") }}
+                 </div>
+                 <div class="col-md-2 d-grid">
+                     {{ search_form.submit(class="btn btn-outline-secondary btn-sm") }}
+                     {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
+                        <a href="{{ url_for('main.index', puesto=target_puesto) }}" class="btn btn-outline-danger btn-sm mt-1" title="Limpiar Filtros">&times; Limpiar</a> {# Renombrado a puesto #}
                      {% endif %}
-                </div>
+                 </div>
             </form>
 
+            {% set current_obs_date = namespace(d=None) %} {# Para detectar cambio de día de la observación #}
             {% if observations %}
-                <ul class="list-group">
+                <ul class="list-group list-group-flush">
                     {% for obs in observations %}
-                        <li class="list-group-item mb-2 shadow-sm">
-                            <div class="d-flex w-100 justify-content-between">
-                                <h5 class="mb-1"><strong>{{ obs.classification }}</strong></h5>
-                                <small class="text-muted">{{ obs.timestamp.strftime('%Y-%m-%d %H:%M') }} UTC</small>
+                        {# Usar obs.observation_date para agrupar #}
+                        {% set obs_date_str = obs.observation_date.strftime('%Y-%m-%d') %}
+                        {% if current_obs_date.d != obs_date_str %}
+                            <li class="list-group-item bg-light text-center p-1 mt-2 mb-1">
+                                {# Formatear fecha de la observación #}
+                                <strong>--- {{ obs.observation_date.strftime('%A, %d de %B de %Y') }} ---</strong> {# Intentar locale español aquí también? Necesitaría otro filtro o pasar locale #}
+                            </li>
+                            {% set current_obs_date.d = obs_date_str %}
+                        {% endif %}
+                        <li class="list-group-item mb-2 border rounded shadow-sm">
+                           <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1"><strong>{{ obs.classification }}</strong></h6>
+                                <div>
+                                    {# Mostrar Hora del Evento (obligatoria) #}
+                                    <small class="text-muted me-2" title="Hora evento"><i class="bi bi-clock"></i> {{ obs.observation_time.strftime('%H:%M') }}</small>
+                                    {# Mostrar Hora de Registro (local) #}
+                                    <small class="text-muted" title="Hora registro (Local)"><i class="bi bi-calendar-check"></i> {{ obs.timestamp | datetime_local }}</small>
+                                </div>
                             </div>
-                            <p class="mb-1">{{ obs.body }}</p>
-                            <small class="text-muted">Registrado por: {{ obs.author.username }}</small>
+                            <p class="mb-1 preserve-newlines">{{ obs.body }}</p>
+                             {% if obs.filename %}
+                                 <small class="d-block mt-1">
+                                     Adjunto:
+                                     <a href="{{ url_for('main.uploaded_file', filename=obs.filename) }}" target="_blank">
+                                         <i class="bi bi-paperclip"></i> {{ obs.filename }}
+                                     </a>
+                                     {% if obs.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                        <a href="{{ url_for('main.uploaded_file', filename=obs.filename) }}" target="_blank">
+                                            <img src="{{ url_for('main.uploaded_file', filename=obs.filename) }}" alt="Adjunto" class="img-thumbnail mt-1" style="max-height: 100px; max-width: 150px; cursor: pointer;">
+                                        </a>
+                                     {% endif %}
+                                 </small>
+                             {% endif %}
+                            <small class="text-muted d-block text-end">Acta registrada por: {{ obs.author.nombre_completo or obs.author.username }}</small> {# Mostrar nombre completo #}
                         </li>
                     {% endfor %}
                 </ul>
             {% else %}
-                 {% if search_query %}
-                     <p class="text-muted">No se encontraron observaciones para "{{ search_query }}".</p>
-                 {% else %}
-                     <p class="text-muted">No hay observaciones registradas todavía.</p>
-                 {% endif %}
+                 <p class="text-muted text-center mt-3">
+                     {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
+                         No se encontraron observaciones para los filtros aplicados en {{ target_puesto }}.
+                     {% else %}
+                         No hay Actas registradas para {{ target_puesto }} todavía.
+                     {% endif %}
+                 </p>
             {% endif %}
-
-        </div> {# Fin col-md-7 #}
-    </div> {# Fin de .row #}
-
+        </div>
+    </div>
 {% endblock %}
-

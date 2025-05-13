@@ -5,17 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }} - Sistema Observaciones</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
     <style>
-        .navbar-brand img { max-height: 40px; margin-right: 10px; }
+        .navbar-brand img { max-height: 40px; margin-right: 10px; vertical-align: middle; }
         body { padding-top: 70px; }
+        .list-group-item.bg-light { font-size: 0.9em; font-weight: bold; }
+        .preserve-newlines { white-space: pre-line; }
     </style>
 </head>
 <body class="bg-light-beige">
-
-    <nav class="navbar navbar-expand-md navbar-dark bg-primary-green fixed-top">
+    <nav class="navbar navbar-expand-md navbar-dark bg-primary-green fixed-top shadow-sm">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
+            <a class="navbar-brand" href="{{ url_for('main.index') if current_user.is_authenticated else url_for('main.select_barrio') }}">
                 <img src="{{ url_for('static', filename='images/blogo.jpg') }}" alt="Logo Vida Barrio">
                 Sistema Observaciones
             </a>
@@ -24,29 +26,36 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarCollapse">
                 <ul class="navbar-nav me-auto mb-2 mb-md-0">
-                    {% if current_user.is_authenticated and current_user.is_admin %}
-                    <li class="nav-item">
-                        <a class="btn btn-outline-light btn-sm me-2" href="{{ url_for('list_users') }}">Administrar Usuarios</a>
-                    </li>
+                    {% if current_user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">Inicio</a>
+                        </li>
+                        {% if current_user.is_admin %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint.startswith('admin.') %}active{% endif %}" href="{{ url_for('admin.list_users') }}">Admin Usuarios</a>
+                        </li>
+                        {% endif %}
                     {% endif %}
                 </ul>
-                <ul class="navbar-nav ms-auto mb-2 mb-md-0">
+                <ul class="navbar-nav ms-auto mb-2 mb-md-0 align-items-center">
                      {% if not current_user.is_authenticated %}
                         <li class="nav-item">
-                            <a class="btn btn-outline-light btn-sm me-2" href="{{ url_for('register') }}">Registrarse</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="btn btn-outline-light btn-sm me-2" href="{{ url_for('login') }}">Iniciar Sesión</a>
+                            {# Al no estar logueado, el único botón es Iniciar Sesión, que lleva a select_barrio primero #}
+                            <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.select_barrio') }}">Iniciar Sesión</a>
                         </li>
                     {% else %}
-                         <li class="nav-item">
-                            <span class="navbar-text me-2">
-                                Usuario: {{ current_user.username }}
+                         <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-white" href="#" id="navbarUserDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-person-circle me-1"></i>
+                                {{ current_user.nombre_completo or current_user.dni }}
                                 {% if current_user.is_admin %}<span class="badge bg-warning ms-1">Admin</span>{% endif %}
-                            </span>
-                        </li>
-                        <li class="nav-item">
-                            <a class="btn btn-outline-light btn-sm" href="{{ url_for('logout') }}">Cerrar Sesión</a>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
+                                <li><span class="dropdown-item-text"><small>Barrio: {{ session.get('current_barrio', 'N/A') }}</small></span></li>
+                                <li><a class="dropdown-item" href="{{ url_for('main.change_password') }}"><i class="bi bi-key me-2"></i>Cambiar Contraseña</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('main.logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión</a></li>
+                            </ul>
                         </li>
                     {% endif %}
                 </ul>
@@ -55,20 +64,60 @@
     </nav>
 
     <main class="container mt-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        {% block content %}{% endblock %}
+        {# --- BLOQUE DE MENSAJES FLASH ELIMINADO --- #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            {% set alert_class = 'alert-info' %} {# Default #}
+            {% if category == 'success' %}{% set alert_class = 'alert-success' %}{% endif %}
+            {% if category == 'danger' %}{% set alert_class = 'alert-danger' %}{% endif %}
+            {% if category == 'warning' %}{% set alert_class = 'alert-warning' %}{% endif %}
+            <div class="alert {{ alert_class }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+{% block content %}{% endblock %}
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Script para inicializar tooltips de Bootstrap (si los usas)
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+
+        // Script simple para autofocus en el primer campo visible del formulario principal
+        // (Excepto en el formulario de búsqueda)
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const mainForms = document.querySelectorAll('main form');
+            mainForms.forEach(form => {
+                // Excluir el formulario de búsqueda que tiene la clase 'row g-2'
+                if (!form.classList.contains('row') && !form.classList.contains('g-2')) {
+                    const firstInput = form.querySelector('input:not([type=hidden]):not([type=button]):not([type=submit]), select, textarea');
+                    if (firstInput) {
+                        firstInput.focus();
+                        // Detener después de enfocar el primer campo del primer formulario no de búsqueda
+                        return;
+                    }
+                }
+            });
+
+            // Específico para el autofocus dentro del acordeón de admin/users
+             const createUserForm = document.querySelector('#collapseOne form');
+             if(createUserForm){
+                 const firstCreateInput = createUserForm.querySelector('input:not([type=hidden]), select, textarea');
+                 const collapseElement = document.getElementById('collapseOne');
+                 if (collapseElement && collapseElement.classList.contains('show') && firstCreateInput) {
+                     setTimeout(() => { firstCreateInput.focus(); }, 300); // Esperar animación del acordeón
+                 }
+             }
+        });
+    </script>
 </body>
 </html>
+
+

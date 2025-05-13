@@ -1,0 +1,75 @@
+{# Guardar como app/templates/bootstrap_wtf.html #}
+{# Este archivo ayuda a renderizar campos de WTForms con estilo Bootstrap #}
+{% macro form_field(field, form_type="basic", horizontal_columns=('lg', 2, 10), button_map={}) %}
+
+    {% if field.type == 'HiddenField' or field.type == 'CSRFTokenField' %}
+        {{ field() }}
+    {% else %}
+        <div class="form-group mb-3
+            {% if field.errors %} has-error{% endif %}
+            {% if field.flags.required %} required{% endif %}
+            {% if form_type == "horizontal" %} row{% endif %}">
+
+            {# No mostrar label para BooleanField NI SubmitField #}
+            {% if form_type == "horizontal" %}
+                {{ field.label(class="form-label " + ( "col-" + horizontal_columns[0] + "-" + horizontal_columns[1] )) }}
+            {% elif form_type == "basic" %}
+                {% if field.type != 'BooleanField' and field.type != 'SubmitField' %}
+                    {{ field.label(class="form-label") }}
+                {% endif %}
+            {% endif %}
+
+
+            {% if form_type == "horizontal" %}
+                <div class="col-{{ horizontal_columns[0] }}-{{ horizontal_columns[2] }}">
+            {% endif %}
+
+            {# --- CORRECCIÓN: Quitar referencias a kwargs --- #}
+            {% if field.type == 'SubmitField' %}
+                <div class="text-center">
+                    {% set btn_class = button_map.get(field.id, 'btn-primary') %}
+                    {{ field(class="btn " + btn_class) }}
+                </div>
+
+            {% elif field.type == 'RadioField' %}
+                 {% for subfield in field %}
+                    <div class="form-check">
+                        {{ subfield(class="form-check-input" + (' is-invalid' if field.errors else '')) }} {# Quitado kwargs #}
+                        {{ subfield.label(class="form-check-label") }}
+                    </div>
+                 {% endfor %}
+
+            {% elif field.type == 'BooleanField' %}
+                 <div class="form-check">
+                    {{ field(class="form-check-input" + (' is-invalid' if field.errors else '')) }} {# Quitado kwargs.pop y kwargs #}
+                    {{ field.label(class="form-check-label") }}
+                 </div>
+
+            {% elif field.type == 'FileField' %}
+                 {{ field(class="form-control" + (' is-invalid' if field.errors else '')) }} {# Quitado kwargs.pop y kwargs #}
+
+            {% else %}
+                 {# Render other fields #}
+                 {{ field(class="form-control" + (' is-invalid' if field.errors else '')) }} {# Quitado kwargs.pop y kwargs #}
+            {% endif %}
+            {# --- FIN CORRECCIÓN --- #}
+
+
+            {% if field.errors %}
+                <div class="invalid-feedback d-block">
+                    {% for error in field.errors %}<span>{{ error }}</span>{% endfor %}
+                </div>
+            {% endif %}
+            {% if field.description %}
+                <div class="form-text">{{ field.description }}</div>
+            {% endif %}
+
+            {% if form_type == "horizontal" %}
+                </div> {# End horizontal column #}
+            {% endif %}
+        </div> {# End form-group #}
+    {% endif %}
+{% endmacro %}
+
+
+

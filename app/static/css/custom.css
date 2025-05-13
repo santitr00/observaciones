@@ -72,5 +72,31 @@
   }
   
   /* Puedes añadir más estilos personalizados aquí */
-  
-  
+
+.form-control,
+.form-select {
+  border: 1px solid #adb5bd; /* Un gris un poco más oscuro que el default de BS */
+  /* Opcional: añadir un pequeño box-shadow al enfocar */
+  /* transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out; */ /* Transición suave */
+}
+
+/* Opcional: Resaltar un poco más al enfocar */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--primary-green); /* Usar el verde primario */
+  box-shadow: 0 0 0 0.2rem rgba(106, 153, 78, 0.25); /* Sombra suave con el color primario */
+}
+
+/* Asegurar que los inválidos también tengan el borde */
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: #dc3545; /* Color de error de Bootstrap */
+}
+.form-control.is-invalid:focus,
+.form-select.is-invalid:focus {
+     border-color: #dc3545;
+     box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+.preserve-newlines {
+  white-space: pre-line; /* Respeta saltos de línea y colapsa espacios extra */
+}
