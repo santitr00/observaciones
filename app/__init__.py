@@ -6,7 +6,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate
-from datetime import timezone
+# Añadir imports
+from datetime import timezone, datetime # Importar datetime explícitamente
 import pytz
 import locale
 
@@ -18,43 +19,79 @@ login.login_message_category = "info"
 csrf = CSRFProtect()
 migrate = Migrate()
 
-os.makedirs("instance", exist_ok=True)
+# Filtro Jinja para convertir UTC a hora local Argentina (para datetime)
+def format_datetime_local(dt_value, format="%Y-%m-%d %H:%M"):
+    if not dt_value:
+        return ""
+    # Asegurarse que es un objeto datetime
+    if not isinstance(dt_value, datetime):
+        return str(dt_value) # Devolver como string si no es datetime
 
-# Filtros Jinja (definidos antes de create_app)
-def format_datetime_local(dt_utc, format="%Y-%m-%d %H:%M"):
-    if not dt_utc: return ""
-    if dt_utc.tzinfo is None: dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+    if dt_value.tzinfo is None:
+        dt_value = dt_value.replace(tzinfo=timezone.utc)
+
     try:
         local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
-        dt_local = dt_utc.astimezone(local_tz)
+        dt_local = dt_value.astimezone(local_tz)
         return dt_local.strftime(format)
-    except Exception: return dt_utc.strftime(format) + " UTC (Error TZ)"
+    except Exception:
+        return dt_value.strftime(format) + " UTC (Error TZ)"
 
-def format_date_full_local_es(dt_utc):
-    if not dt_utc: return ""
-    if dt_utc.tzinfo is None: dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+# Filtro Jinja para formatear fecha completa en español
+def format_date_full_local_es(date_value):
+    if not date_value:
+        return ""
+
+    # dt_local será el objeto date o datetime a formatear
+    dt_local_to_format = date_value
+
+    # Si es un datetime, convertirlo a zona local primero
+    if isinstance(date_value, datetime):
+        if date_value.tzinfo is None:
+            date_value = date_value.replace(tzinfo=timezone.utc)
+        try:
+            local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
+            dt_local_to_format = date_value.astimezone(local_tz)
+        except Exception as e:
+            print(f"Error convirtiendo datetime a local en date_full_local_es: {e}")
+            # Usar el datetime original si falla la conversión de zona
+            pass # dt_local_to_format ya es date_value
+
+    # Si es solo un date, no necesita conversión de zona horaria
+    # dt_local_to_format ya es el objeto date_value
+
     try:
-        local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
-        dt_local = dt_utc.astimezone(local_tz)
         original_locale = locale.getlocale(locale.LC_TIME)
-        try: locale.setlocale(locale.LC_TIME, 'es_AR.UTF-8')
+        try:
+            locale.setlocale(locale.LC_TIME, 'es_AR.UTF-8')
         except locale.Error:
-            try: locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-            except locale.Error: print("Advertencia: Locale español no encontrado.")
-        formatted_date = dt_local.strftime('%A, %d de %B de %Y').capitalize()
+            try:
+                 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+            except locale.Error:
+                 print("Advertencia: Locale español no encontrado para formateo de fecha. Usando locale por defecto.")
+        
+        # Formato: Lunes, 04 de Mayo de 2025
+        # Para objetos date, strftime funciona igual que para datetime para estos formatos
+        formatted_date = dt_local_to_format.strftime('%A, %d de %B de %Y').capitalize()
         locale.setlocale(locale.LC_TIME, original_locale)
         return formatted_date
     except Exception as e:
-        print(f"Error formateando fecha local: {e}")
-        return dt_utc.strftime('%Y-%m-%d') + " (Error Locale)"
+        print(f"Error formateando fecha con locale: {e}")
+        # Fallback si todo lo demás falla
+        if hasattr(dt_local_to_format, 'strftime'):
+            return dt_local_to_format.strftime('%Y-%m-%d')
+        else:
+            return str(dt_local_to_format) + " (Error Locale/Format)"
+
 
 def create_app(config_class=Config):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_class)
 
     try:
-        os.makedirs(app.instance_path)
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        os.makedirs(app.instance_path, exist_ok=True)
+        if 'UPLOAD_FOLDER' in app.config:
+                 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     except OSError as e:
          app.logger.error(f"Error creando carpetas: {e}")
 
@@ -63,19 +100,16 @@ def create_app(config_class=Config):
     csrf.init_app(app)
     migrate.init_app(app, db)
 
-    # Registrar filtros Jinja
     app.jinja_env.filters['datetime_local'] = format_datetime_local
     app.jinja_env.filters['date_full_local_es'] = format_date_full_local_es
 
-    # Registrar Blueprints
     from . import admin_routes
     app.register_blueprint(admin_routes.bp)
     from . import main_routes
     app.register_blueprint(main_routes.bp)
 
-    # Ya no se importan modelos aquí directamente
-
     return app
+
 
 
     

@@ -34,11 +34,11 @@ class MultiCheckboxField(SelectMultipleField):
 
 # --- Formulario de Login (Usa DNI) ---
 class LoginForm(FlaskForm):
-    dni = StringField('DNI', validators=[DataRequired(), Regexp('^[0-9]+$', message='El DNI solo debe contener números.')])
-    password = PasswordField('Contraseña', validators=[DataRequired()])
+    dni = StringField('DNI', validators=[DataRequired(message="El DNI es obligatorio"), Regexp('^[0-9]+$', message='El DNI solo debe contener números.')])
+    password = PasswordField('Contraseña', validators=[DataRequired(message='La contraseña es obligatoria.')])
     submit = SubmitField('Iniciar Sesión')
 
-# --- Formulario de Observación ---
+# --- Formulario de Acta ---
 class ObservationForm(FlaskForm):
     classification_choices = [('', '-- SELECCIONE TIPO DE ACTA --'),
         ('INICIO JORNADA', 'INICIO JORNADA'),
@@ -50,7 +50,7 @@ class ObservationForm(FlaskForm):
     classification = SelectField('Clasificación', choices=classification_choices, validators=[DataRequired(message="La clasificación es obligatoria.")])
     observation_date = DateField('Fecha del Evento', format='%Y-%m-%d', validators=[DataRequired(message="La fecha es obligatoria."), date_check])
     observation_time = TimeField('Hora del Evento (HH:MM)', format='%H:%M', validators=[DataRequired(message="La hora es obligatoria.")])
-    body = TextAreaField('Descripción', validators=[DataRequired(), Length(min=5, max=500)], render_kw={"rows": 4})
+    body = TextAreaField('Descripción', validators=[DataRequired(message="ES obligatorio agregar una descripción"), Length(min=5, max=500)], render_kw={"rows": 4})
     attachment = FileField('Adjuntar Archivo (Opcional)', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx'], '¡Solo imágenes o documentos!')])
     submit = SubmitField('Registrar Observación')
 
@@ -72,12 +72,12 @@ class EditUserForm(FlaskForm):
     email = EmailField('Email (Opcional)', validators=[Optional(), Length(max=120), Email()])
     # --- ASEGURARSE QUE ESTE CAMPO ESTÉ PRESENTE Y CORRECTO ---
     puestos = MultiCheckboxField(
-        'Puestos Asignados (en este barrio)',
+        'Puestos Asignados',
         choices=[(p, p) for p in PUESTOS],
-        validators= [atleast_one]
+        validators= [Optional()]
     )
     # --------------------------------------------------------
-    password = PasswordField('Nueva Contraseña (dejar en blanco para no cambiar)', validators=[Optional(), Length(min=6)])
+    password = PasswordField('Nueva Contraseña (dejar en blanco para no cambiar)', validators=[Optional(), Length(min=8, message='La contraseña debe tener al menos 8 dígitos.')])
     password2 = PasswordField('Repetir Nueva Contraseña', validators=[EqualTo('password', message='Las contraseñas deben coincidir.')])
     is_admin = BooleanField('Es Administrador')
     submit = SubmitField('Guardar Cambios')
@@ -115,7 +115,7 @@ class AdminCreateUserForm(FlaskForm):
     ])
     nombre_completo = StringField('Nombre y Apellido', validators=[DataRequired(message='Es necesario crear el usuario con Nombre y Apellido.'), Length(max=128)])
     email = EmailField('Email (Opcional)', validators=[Optional(), Length(max=120), Email()])
-    puestos = MultiCheckboxField('Puestos a Asignar', choices=[(p, p) for p in PUESTOS], validators=[atleast_one]) 
+    puestos = MultiCheckboxField('Puestos a Asignar', choices=[(p, p) for p in PUESTOS], validators= [Optional()]) 
 
     password = PasswordField('Contraseña', validators=[DataRequired(message='Es necesario crear el usuario con una contraseña.'), Length(min=8, message='La contraseña debe tener al menos 8 digitos.')])
     password2 = PasswordField('Repetir Contraseña', validators=[DataRequired(message='Es necesario completar este campo.'), EqualTo('password', message='Las contraseñas deben coincidir.')])

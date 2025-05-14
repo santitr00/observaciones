@@ -1,10 +1,7 @@
-user_obj)">
-```html
 {% extends "base.html" %}
 {% import "bootstrap_wtf.html" as wtf %}
 
 {% block content %}
-    {# Mostrar el barrio del admin actual #}
     <h2>Administración de Usuarios ({{ current_barrio }})</h2>
     <hr>
 
@@ -22,7 +19,7 @@ user_obj)">
                  {{ wtf.form_field(create_form.dni) }}
                  {{ wtf.form_field(create_form.nombre_completo) }}
                  {{ wtf.form_field(create_form.email) }}
-                 {{ wtf.form_field(create_form.puestos) }}
+                 {{ wtf.form_field(create_form.puestos) }} {# Checklist de Puestos #}
                  {{ wtf.form_field(create_form.password) }}
                  {{ wtf.form_field(create_form.password2) }}
                  {{ wtf.form_field(create_form.is_admin) }}
@@ -47,28 +44,30 @@ user_obj)">
                     </tr>
                 </thead>
                 <tbody>
-                    {# --- CORRECCIÓN: Usar user_obj en todo el bucle --- #}
                     {% for user_obj in users %}
                         <tr>
                             <td>{{ user_obj.dni }}</td>
                             <td>{{ user_obj.nombre_completo }}</td>
                             <td>
-                                {% set assigned_puestos = user_obj.puestos_asignados.filter_by(barrio=current_barrio).with_entities(UserPuestoAssignment.puesto).all() %}
-                                {% if assigned_puestos %}
-                                    {% for puesto_tuple in assigned_puestos %}
-                                        <span class="badge bg-info me-1">{{ puesto_tuple[0] }}</span>
-                                    {% endfor %}
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
+                                {% set assigned_puestos = user_obj.puestos_asignados.with_entities(UserPuestoAssignment.puesto).all() %}
+                                    {% if assigned_puestos %}
+                                        {% for puesto_tuple in assigned_puestos %}
+                                            <span class="badge bg-info me-1">{{ puesto_tuple[0] }}</span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ user_obj.email or '-' }}</td>
+                                <td>
+                                    {% if user_obj.is_admin %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}
+                                </td>
                             <td>{{ user_obj.email or '-' }}</td>
                             <td>
                                 {% if user_obj.is_admin %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}
                             </td>
                             <td>
-                                <a href="{{ url_for('admin.manage_puestos', user_id=user_obj.id) }}" class="btn btn-sm btn-outline-info me-1" title="Gestionar Puestos"><i class="bi bi-tags"></i> Puestos</a>
-                                <a href="{{ url_for('admin.edit_user', user_id=user_obj.id) }}" class="btn btn-sm btn-outline-primary me-1" title="Editar Datos Usuario"><i class="bi bi-pencil"></i></a>
+                                <a href="{{ url_for('admin.edit_user', user_id=user_obj.id) }}" class="btn btn-sm btn-outline-primary me-1" title="Editar Usuario y Puestos"><i class="bi bi-pencil-square"></i> Editar</a>
                                 <form action="{{ url_for('admin.delete_user', user_id=user_obj.id) }}" method="post" style="display: inline;">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar Usuario" onclick="return confirm('¿Estás seguro de que quieres eliminar al usuario DNI {{ user_obj.dni }} de {{ user_obj.barrio }}?')">
@@ -78,7 +77,6 @@ user_obj)">
                             </td>
                         </tr>
                     {% endfor %}
-                    {# --- FIN CORRECCIÓN --- #}
                 </tbody>
             </table>
         </div>
@@ -86,4 +84,4 @@ user_obj)">
         <p class="text-muted">No hay usuarios registrados para {{ current_barrio }}.</p>
     {% endif %}
 {% endblock %}
-```
+

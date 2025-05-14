@@ -7,110 +7,139 @@
       <a href="{{ url_for('main.logout') }}" class="btn btn-sm btn-outline-secondary">Cambiar Barrio / Salir</a>
     </div>
 
-    <div class="row">
-        <div class="col-md-5 mb-4">
-            <h2>Registrar Acta en: {{ target_puesto }}</h2> {# Renombrado a puesto #}
-            <hr>
-            <form action="{{ url_for('main.index', puesto=target_puesto) }}" method="post" novalidate enctype="multipart/form-data"> {# Renombrado a puesto #}
-                {{ obs_form.hidden_tag() }}
-                {{ wtf.form_field(obs_form.classification) }}
-                {{ wtf.form_field(obs_form.observation_date) }} 
-                {{ wtf.form_field(obs_form.observation_time) }} 
-                {{ wtf.form_field(obs_form.body) }}
-                {{ wtf.form_field(obs_form.attachment) }}
-                {{ wtf.form_field(obs_form.submit) }}
-            </form>
+    {% if not target_puesto %}
+        <div class="alert alert-danger text-center">
+            No tenes permisos para registrar un acta.
         </div>
-
-        <div class="col-md-7">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                 <h2>Libro de Actas: {{ target_puesto }}</h2> {# Renombrado a puesto #}
-                 {# Menú para cambiar de Puesto (usa lista global PUESTOS) #}
-                 {% if available_puestos and available_puestos|length > 1 %}
-                     <div class="dropdown">
-                        <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
-                            Ver Puesto
-                        </button>
-                        <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
-                            {% for puesto in available_puestos %} {# Renombrado a puesto #}
-                                <li><a class="dropdown-item {% if puesto == target_puesto %}active{% endif %}" href="{{ url_for('main.index', puesto=puesto) }}">{{ puesto }}</a></li> {# Renombrado a puesto #}
-                            {% endfor %}
-                        </ul>
-                    </div>
-                 {% endif %}
-            </div>
-            <p><small>Barrio: {{ current_barrio }}</small></p>
-            <hr>
-
-            <form action="{{ url_for('main.index') }}" method="get" class="mb-3 row g-2 align-items-center">
-                 <input type="hidden" name="puesto" value="{{ target_puesto }}"> {# Renombrado a puesto #}
-                 <div class="col-md-4">
-                     {{ search_form.query(class="form-control form-control-sm", placeholder="Buscar texto...", value=search_query or '') }}
-                 </div>
-                 <div class="col-md-3">
-                     {{ search_form.start_date(class="form-control form-control-sm", type="date", placeholder="Desde") }}
-                 </div>
-                  <div class="col-md-3">
-                     {{ search_form.end_date(class="form-control form-control-sm", type="date", placeholder="Hasta") }}
-                 </div>
-                 <div class="col-md-2 d-grid">
-                     {{ search_form.submit(class="btn btn-outline-secondary btn-sm") }}
-                     {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
-                        <a href="{{ url_for('main.index', puesto=target_puesto) }}" class="btn btn-outline-danger btn-sm mt-1" title="Limpiar Filtros">&times; Limpiar</a> {# Renombrado a puesto #}
-                     {% endif %}
-                 </div>
-            </form>
-
-            {% set current_obs_date = namespace(d=None) %} {# Para detectar cambio de día de la observación #}
-            {% if observations %}
-                <ul class="list-group list-group-flush">
-                    {% for obs in observations %}
-                        {# Usar obs.observation_date para agrupar #}
-                        {% set obs_date_str = obs.observation_date.strftime('%Y-%m-%d') %}
-                        {% if current_obs_date.d != obs_date_str %}
-                            <li class="list-group-item bg-light text-center p-1 mt-2 mb-1">
-                                {# Formatear fecha de la observación #}
-                                <strong>--- {{ obs.observation_date.strftime('%A, %d de %B de %Y') }} ---</strong> {# Intentar locale español aquí también? Necesitaría otro filtro o pasar locale #}
-                            </li>
-                            {% set current_obs_date.d = obs_date_str %}
+    {% else %}
+        <div class="row">
+            <div class="col-md-5 mb-4">
+                <h2>Registrar Observación en: {{ target_puesto }}</h2>
+                <hr>
+                {# --- Mostrar formulario solo si puede registrar --- #}
+                {% if can_register_in_target_puesto %}
+                    <form action="{{ url_for('main.index', puesto=target_puesto) }}" method="post" novalidate enctype="multipart/form-data">
+                        {{ obs_form.hidden_tag() }}
+                        {{ wtf.form_field(obs_form.classification) }}
+                        {{ wtf.form_field(obs_form.observation_date) }}
+                        {{ wtf.form_field(obs_form.observation_time) }}
+                        {{ wtf.form_field(obs_form.body) }}
+                        {{ wtf.form_field(obs_form.attachment) }}
+                        {{ wtf.form_field(obs_form.submit) }}
+                    </form>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill"></i>
+                        Solo puedes ver el libro de actas de este puesto.
+                        {% if not current_user.get_puestos_asignados_en_barrio(current_barrio) %}
+                            <br>No tienes puestos asignados en este barrio para registrar observaciones.
+                        {% else %}
+                            <br>Para registrar una observación, selecciona uno de tus puestos asignados desde el menú "Ver Puesto".
                         {% endif %}
-                        <li class="list-group-item mb-2 border rounded shadow-sm">
-                           <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1"><strong>{{ obs.classification }}</strong></h6>
-                                <div>
-                                    {# Mostrar Hora del Evento (obligatoria) #}
-                                    <small class="text-muted me-2" title="Hora evento"><i class="bi bi-clock"></i> {{ obs.observation_time.strftime('%H:%M') }}</small>
-                                    {# Mostrar Hora de Registro (local) #}
-                                    <small class="text-muted" title="Hora registro (Local)"><i class="bi bi-calendar-check"></i> {{ obs.timestamp | datetime_local }}</small>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="col-md-7">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                     <div>
+                        <h2>Libro de Actas: {{ target_puesto }}</h2> {# Renombrado #}
+                        <p class="mb-0"><small>Barrio: {{ current_barrio }}</small></p>
+                     </div>
+                     {# Menú para cambiar de Puesto #}
+                         <div class="dropdown">
+                            <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+                                Ver Puesto
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+                                {% for puesto in available_puestos %} {# Renombrado #}
+                                    <li><a class="dropdown-item {% if puesto == target_puesto %}active{% endif %}" href="{{ url_for('main.index', puesto=puesto) }}">{{ puesto }}</a></li> {# Renombrado #}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                </div>
+                <hr class="mt-0">
+
+                <form action="{{ url_for('main.index') }}" method="get" class="mb-3 row g-2 align-items-center">
+                     <input type="hidden" name="puesto" value="{{ target_puesto }}"> {# Renombrado #}
+                     <div class="col-md-4">
+                         {{ search_form.query(class="form-control form-control-sm", placeholder="Buscar texto...", value=search_query or '') }}
+                     </div>
+                     <div class="col-md-3">
+                         {{ search_form.start_date(class="form-control form-control-sm", type="date", placeholder="Desde") }}
+                     </div>
+                      <div class="col-md-3">
+                         {{ search_form.end_date(class="form-control form-control-sm", type="date", placeholder="Hasta") }}
+                     </div>
+                     <div class="col-md-2 d-grid">
+                         {{ search_form.submit(class="btn btn-outline-secondary btn-sm") }}
+                         {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
+                            <a href="{{ url_for('main.index', puesto=target_puesto) }}" class="btn btn-outline-danger btn-sm mt-1" title="Limpiar Filtros">&times; Limpiar</a> {# Renombrado #}
+                         {% endif %}
+                     </div>
+                </form>
+                
+                {# Botón para Descargar PDF (se añadirá lógica después) #}
+                <div class="mb-3 text-end col-md-12 text-dark" > 
+                    <a href="{{ url_for('main.download_libro_actas_pdf', puesto=target_puesto, query=search_query, start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}" class="btn btn-sm btn-success" target="_blank">
+                        <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+                    </a>
+                </div>
+
+                {% set current_obs_date_str = namespace(d=None) %}
+                {% if observations %}
+                    <ul class="list-group list-group-flush">
+                        {% for obs in observations %}
+                            {# --- Usar filtro para fecha completa en español --- #}
+                            {% set obs_date_display = obs.observation_date | date_full_local_es %}
+                            {% set obs_date_compare = obs.observation_date.strftime('%Y-%m-%d') %}
+
+                            {% if current_obs_date_str.d != obs_date_compare %}
+                                <li class="list-group-item bg-light text-center p-1 mt-2 mb-1">
+                                    <strong>--- {{ obs_date_display }} ---</strong>
+                                </li>
+                                {% set current_obs_date_str.d = obs_date_compare %}
+                            {% endif %}
+                            <li class="list-group-item mb-2 border rounded shadow-sm">
+                               <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1"><strong>{{ obs.classification }} <small class="text-muted" title="Hora del evento"><i class="bi bi-clock-fill"></i> {{ obs.observation_time.strftime('%H:%M') }}</small></strong></h6>
+                                    {# Hora del evento asignada por el usuario #}
+                                    
                                 </div>
-                            </div>
-                            <p class="mb-1 preserve-newlines">{{ obs.body }}</p>
-                             {% if obs.filename %}
-                                 <small class="d-block mt-1">
-                                     Adjunto:
-                                     <a href="{{ url_for('main.uploaded_file', filename=obs.filename) }}" target="_blank">
-                                         <i class="bi bi-paperclip"></i> {{ obs.filename }}
-                                     </a>
-                                     {% if obs.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
-                                        <a href="{{ url_for('main.uploaded_file', filename=obs.filename) }}" target="_blank">
-                                            <img src="{{ url_for('main.uploaded_file', filename=obs.filename) }}" alt="Adjunto" class="img-thumbnail mt-1" style="max-height: 100px; max-width: 150px; cursor: pointer;">
-                                        </a>
-                                     {% endif %}
-                                 </small>
-                             {% endif %}
-                            <small class="text-muted d-block text-end">Acta registrada por: {{ obs.author.nombre_completo or obs.author.username }}</small> {# Mostrar nombre completo #}
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                 <p class="text-muted text-center mt-3">
-                     {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
-                         No se encontraron observaciones para los filtros aplicados en {{ target_puesto }}.
-                     {% else %}
-                         No hay Actas registradas para {{ target_puesto }} todavía.
-                     {% endif %}
-                 </p>
-            {% endif %}
+                                <p class="mb-1 preserve-newlines">{{ obs.body }}</p>
+                                 {% if obs.filename %}
+                                     <small class="d-block mt-1">
+                                         Adjunto:
+                                         <a href="{{ url_for('main.uploaded_file', filename=obs.filename) }}" target="_blank">
+                                             <i class="bi bi-paperclip"></i> {{ obs.filename }}
+                                         </a>
+                                         {% if obs.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                                            <a href="{{ url_for('main.uploaded_file', filename=obs.filename) }}" target="_blank">
+                                                <img src="{{ url_for('main.uploaded_file', filename=obs.filename) }}" alt="Adjunto" class="img-thumbnail mt-1" style="max-height: 100px; max-width: 150px; cursor: pointer;">
+                                            </a>
+                                         {% endif %}
+                                     </small>
+                                 {% endif %}
+                                <div class="d-flex justify-content-end align-items-center mt-1">
+                                    <small class="text-muted me-2">Acta registrada por: {{ obs.author.nombre_completo or obs.author.dni }} el</small>
+                                    {# --- Hora de REGISTRO (local) --- #}
+                                    <small class="text-muted" title="Registrado (Local)"><i class="bi bi-calendar-check"></i> {{ obs.timestamp | datetime_local }}</small>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                     <p class="text-muted text-center mt-3">
+                         {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
+                             No se encontraron observaciones para los filtros aplicados en {{ target_puesto }}.
+                         {% else %}
+                             No hay observaciones registradas para {{ target_puesto }} todavía.
+                         {% endif %}
+                     </p>
+                {% endif %}
+            </div>
         </div>
-    </div>
+    {% endif %}
 {% endblock %}
+
+

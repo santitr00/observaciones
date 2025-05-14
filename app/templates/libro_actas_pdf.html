@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Libro de Actas - {{ barrio }} - {{ puesto }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.75in;
+        }
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+        }
+        h1 { font-size: 18pt; text-align: center; margin-bottom: 20px; color: #333; }
+        h2 { font-size: 14pt; border-bottom: 1px solid #ccc; padding-bottom: 5px; color: #333; margin-top: 20px;}
+        h3.date-separator {
+            font-size: 11pt;
+            text-align: center;
+            background-color: #f0f0f0;
+            padding: 5px;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            color: #333;
+        }
+        .observation-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
+            border-radius: 3px;
+        }
+        .observation-header {
+            overflow: auto; /* Clearfix */
+            margin-bottom: 5px;
+            font-size: 9pt;
+            border-bottom: 1px dotted #eee;
+            padding-bottom: 3px;
+        }
+        .observation-header .classification {
+            font-weight: bold;
+            float: left;
+        }
+        .observation-header .times {
+            float: right;
+            text-align: right;
+        }
+        .observation-body {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            white-space: pre-line; /* Respeta saltos de línea del texto */
+            clear: both;
+        }
+        .observation-footer {
+            font-size: 8pt;
+            color: #555;
+            text-align: right;
+            margin-top: 8px;
+            border-top: 1px dotted #eee;
+            padding-top: 3px;
+        }
+        .attachment-info { /* Contenedor para info y posible imagen */
+            font-size: 8pt;
+            margin-top: 5px;
+        }
+        .attachment-info .attachment-link {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .attachment-info img {
+            max-width: 200px; /* Ancho máximo de la imagen en el PDF */
+            max-height: 150px; /* Alto máximo */
+            display: block; /* Para que el margen funcione */
+            margin-top: 5px;
+            border: 1px solid #eee;
+        }
+        .filters-applied {
+            font-size: 9pt;
+            color: #777;
+            border: 1px dashed #ccc;
+            padding: 8px;
+            margin-bottom: 15px;
+        }
+        .generation-time {
+            text-align: right;
+            font-size: 8pt;
+            color: #777;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Libro de Actas</h1>
+    <h2>Barrio: {{ barrio }} - Puesto: {{ puesto }}</h2>
+    <p class="generation-time">Generado: {{ generation_time.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+
+    {% if query or start_date_str or end_date_str %}
+        <div class="filters-applied">
+            <strong>Filtros Aplicados:</strong><br>
+            {% if query %}Búsqueda: "{{ query }}"<br>{% endif %}
+            {% if start_date_str %}Desde: {{ start_date_str | date_full_local_es }}<br>{% endif %}
+            {% if end_date_str %}Hasta: {{ end_date_str | date_full_local_es }}<br>{% endif %}
+        </div>
+    {% endif %}
+    <hr style="margin-bottom: 15px;">
+
+    {% set current_obs_date_str = namespace(d=None) %}
+    {% if observations %}
+        {% for obs in observations %}
+            {% set obs_date_display = obs.observation_date | date_full_local_es %}
+            {% set obs_date_compare = obs.observation_date.strftime('%Y-%m-%d') %}
+
+            {% if current_obs_date_str.d != obs_date_compare %}
+                <h3 class="date-separator">--- {{ obs_date_display }} ---</h3>
+                {% set current_obs_date_str.d = obs_date_compare %}
+            {% endif %}
+
+            <div class="observation-item">
+                <div class="observation-header">
+                    <span class="classification">{{ obs.classification }}</span>
+                    <span class="times">
+                        {% if obs.observation_time %}
+                            Evento: {{ obs.observation_time.strftime('%H:%M') }} |
+                        {% endif %}
+                        Registro: {{ obs.timestamp | datetime_local }}
+                    </span>
+                </div>
+                <div class="observation-body">{{ obs.body }}</div>
+                {% if obs.filename %}
+                    <div class="attachment-info">
+                        Adjunto:
+                        {# WeasyPrint necesita una URL completa o una ruta de archivo local para src #}
+                        {# Con base_url, url_for debería funcionar si el servidor Flask está accesible #}
+                        <a href="{{ url_for('main.uploaded_file', filename=obs.filename, _external=True) }}" class="attachment-link">{{ obs.filename }}</a>
+                        {% if obs.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
+                            <img src="{{ url_for('main.uploaded_file', filename=obs.filename, _external=True) }}" alt="Adjunto: {{ obs.filename }}">
+                        {% endif %}
+                    </div>
+                {% endif %}
+                <div class="observation-footer">
+                    Por: {{ obs.author.nombre_completo or obs.author.dni }}
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>No hay observaciones que coincidan con los filtros aplicados.</p>
+    {% endif %}
+</body>
+</html>
+

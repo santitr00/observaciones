@@ -39,9 +39,12 @@ class User(UserMixin, db.Model):
     # Relación con UserPuestoAssignment
     # Un registro User (DNI+Barrio) puede tener varios puestos asignados en ESE barrio
     puestos_asignados = db.relationship('UserPuestoAssignment',
-                                        foreign_keys=[UserPuestoAssignment.user_id, UserPuestoAssignment.barrio],
+                                        foreign_keys=[UserPuestoAssignment.user_id],
                                         primaryjoin="and_(User.id==UserPuestoAssignment.user_id, User.barrio==UserPuestoAssignment.barrio)",
-                                        backref='user', lazy='dynamic', cascade="all, delete-orphan")
+                                        backref=db.backref('assigned_user_record', lazy='select'),
+                                        lazy='dynamic',
+                                        cascade="all, delete-orphan"
+    )
 
     observations = db.relationship('Observation', backref='author', lazy='dynamic')
 
@@ -54,13 +57,16 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
     # Método para obtener los nombres de los puestos asignados en el barrio actual del User
-    def get_puestos_en_barrio_actual(self):
-        if not self.barrio: # Si el usuario no tiene un barrio definido (no debería pasar)
-            return []
-        asignaciones = db.session.scalars(
-            self.puestos_asignados.filter_by(barrio=self.barrio).with_entities(UserPuestoAssignment.puesto)
-        ).all()
-        return asignaciones
+    def get_puestos_asignados_en_barrio(self, barrio_a_consultar):
+            if not barrio_a_consultar:
+                return []
+            asignaciones = db.session.scalars(
+                db.select(UserPuestoAssignment.puesto).where(
+                    UserPuestoAssignment.user_id == self.id,
+                    UserPuestoAssignment.barrio == barrio_a_consultar
+                )
+            ).all()
+            return asignaciones
 
     def __repr__(self):
         admin_status = " (Admin)" if self.is_admin else ""

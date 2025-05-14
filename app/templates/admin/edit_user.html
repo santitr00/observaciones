@@ -2,24 +2,24 @@
 {% import "bootstrap_wtf.html" as wtf %}
 
 {% block content %}
-    <h2>Editar Usuario: {{ user_to_edit.nombre_completo }} ({{ current_barrio }})</h2>
-    <p class="text-muted">Los puestos asignados se gestionan por separado.</p>
+    <h2 class="justify-content-center text-center">Editar Usuario: {{ user_to_edit.nombre_completo or user_to_edit.dni }} ({{ current_barrio }})</h2>
     <hr>
-    <div class="row">
+    <div class="row justify-content-center">
         <div class="col-md-6">
              <div class="card shadow-sm">
                  <div class="card-body">
                     <form action="" method="post" novalidate>
                         {{ form.hidden_tag() }}
-                        {# Mostrar DNI (ahora editable) #}
+                        {# Mostrar Username (no editable) #}
+                        {# --- DNI ahora editable usando wtf.form_field --- #}
                         {{ wtf.form_field(form.dni) }}
                         {{ wtf.form_field(form.nombre_completo) }}
                         {{ wtf.form_field(form.email) }}
-                        {{ wtf.form_field(form.puestos) }}
+                        {{ wtf.form_field(form.puestos) }} {# Checklist para Puestos #}
                         {{ wtf.form_field(form.password) }}
                         {{ wtf.form_field(form.password2) }}
                         {{ wtf.form_field(form.is_admin) }}
-                        <div>
+                        <div class="text-center mt-3">
                             {{ wtf.form_field(form.submit) }}
                             <a href="{{ url_for('admin.list_users') }}" class="btn btn-secondary">Cancelar</a>
                         </div>
@@ -29,3 +29,4 @@
         </div>
     </div>
 {% endblock %}
+
