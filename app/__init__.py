@@ -102,7 +102,7 @@ def create_app(config_class=Config):
 
     app.jinja_env.filters['datetime_local'] = format_datetime_local
     app.jinja_env.filters['date_full_local_es'] = format_date_full_local_es
-
+    from app import models
     from . import admin_routes
     app.register_blueprint(admin_routes.bp)
     from . import main_routes

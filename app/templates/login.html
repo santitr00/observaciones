@@ -6,7 +6,15 @@
         <div class="col-md-6 col-lg-5">
             <div class="card shadow-sm">
                 <div class="card-header text-center bg-primary-green text-white">
-                     <img src="{{ url_for('static', filename='images/blogo.jpg') }}" alt="Logo" style="max-height: 50px; margin-bottom: 5px;">
+                    {% if barrio == 'VIDA BARRIO CERRADO' %}
+                        <img src="{{ url_for('static', filename='images/blogo.jpg') }}" alt="" style="max-height: 50px; margin-bottom: 5px;">
+                    {% elif barrio ==  'VIDA CLUB DE CAMPO' %}
+                        <img src="{{ url_for('static', filename='images/blogo.jpg') }}" alt="" style="max-height: 50px; margin-bottom: 5px;">
+                    {% elif barrio == 'CADAQUES' %}
+                        <img src="{{ url_for('static', filename='images/cadaq.jpg') }}" alt="" style="max-height: 50px; margin-bottom: 5px;">
+                    {% else %}
+                        <img src="{{ url_for('static', filename='images/index.png') }}" alt="" style="max-height: 50px; margin-bottom: 5px;">
+                    {% endif %}
                      <h4 class="mb-0" style="color: black;">Login - {{ barrio }}</h4>
                 </div>
                 <div class="card-body p-4">

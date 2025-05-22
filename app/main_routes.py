@@ -7,7 +7,7 @@ from app import db
 from app.forms import (LoginForm, ObservationForm, SearchForm,
                        ChangePasswordForm)
 # Importar PUESTOS
-from app.models import User, Observation, PUESTOS, BARRIOS # Quitar Jornada, Assignment
+from app.models import User, Observation, PUESTOS, BARRIOS, UserPuestoAssignment
 from flask_login import current_user, login_user, logout_user, login_required
 from datetime import datetime, timezone, date, time
 import pytz
@@ -130,7 +130,7 @@ def index():
     if obs_form.validate_on_submit() and request.method == 'POST':
         # --- Validar si puede registrar en este puesto ---
         if not can_register_in_target_puesto:
-             flash(f'No tienes permiso para registrar observaciones en el puesto {target_puesto}.', 'danger')
+             flash(f'No tienes permiso para registrar actas en el puesto {target_puesto}.', 'danger')
         # --------------------------------------------
         else:
             filename = None
@@ -141,6 +141,7 @@ def index():
                     upload_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
                     os.makedirs(current_app.config['UPLOAD_FOLDER'], exist_ok=True)
                     file.save(upload_path)
+                    flash('¡Acta registrada con éxito!', 'success')
                 except Exception as e:
                      flash(f'Error al guardar el archivo adjunto: {e}', 'danger'); filename = None
             observation = Observation(
@@ -149,8 +150,24 @@ def index():
                 author=current_user, barrio=current_barrio, zona=target_puesto, filename=filename
             )
             db.session.add(observation); db.session.commit()
-            flash('¡Observación registrada con éxito!', 'success')
-            return redirect(url_for('main.index', puesto=target_puesto))
+            if observation.classification == "FIN JORNADA":
+                # Guardar el nombre del usuario para el mensaje flash antes de cerrar sesión
+                nombre_usuario_actual = current_user.nombre_completo 
+                
+                # Limpiar datos de sesión relevantes y cerrar la sesión del usuario
+                session.pop('current_barrio', None) # Elimina el barrio actual de la sesión
+                logout_user() # Cierra la sesión del usuario de Flask-Login
+                
+                # Mensaje flash informando al usuario
+                flash(f'FIN DE JORNADA registrado por {nombre_usuario_actual}. Tu sesión ha sido cerrada.', 'info')
+                # Redirigir a la página de selección de barrio (o login)
+                return redirect(url_for('main.select_barrio')) 
+            else:
+                # Si no es "FIN JORNADA", mostrar mensaje de éxito normal
+                flash('¡Actas registrada con éxito!', 'success')
+                return redirect(url_for('main.index', puesto=target_puesto))
+    
+    
 
     # Obtener Observaciones
     observations = []
@@ -179,6 +196,8 @@ def index():
                            can_register_in_target_puesto=can_register_in_target_puesto, # Para habilitar/deshabilitar form
                            search_query=query)
 
+
+
 @bp.route('/libro_actas/pdf')
 @login_required
 def download_libro_actas_pdf():
@@ -198,7 +217,7 @@ def download_libro_actas_pdf():
         target_puesto = PUESTOS[0] if PUESTOS else 'Default'
 
 
-    # Obtener Observaciones Filtradas (misma lógica que en index)
+    # Obtener Actas Filtradas (misma lógica que en index)
     observations_query = db.select(Observation).where(
         Observation.barrio == current_barrio,
         Observation.zona == target_puesto
@@ -287,14 +306,3 @@ def uploaded_file(filename):
         return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
     except FileNotFoundError:
         abort(404)
-
-
-
-
-
-
-
-
-
-
-    

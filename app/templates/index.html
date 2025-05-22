@@ -2,9 +2,8 @@
 {% import "bootstrap_wtf.html" as wtf %}
 
 {% block content %}
-    <div class="alert alert-secondary d-flex justify-content-between align-items-center" role="alert">
-      <span>Barrio Actual: <strong>{{ current_barrio }}</strong></span>
-      <a href="{{ url_for('main.logout') }}" class="btn btn-sm btn-outline-secondary">Cambiar Barrio / Salir</a>
+    <div class="alert alert-secondary text-align: center" role="alert">
+      <span style="text-transform: uppercase; text-align: center;" > <strong>LIBRO DE ACTAS {{ current_barrio }}</strong></span>
     </div>
 
     {% if not target_puesto %}
@@ -14,7 +13,7 @@
     {% else %}
         <div class="row">
             <div class="col-md-5 mb-4">
-                <h2>Registrar Observación en: {{ target_puesto }}</h2>
+                <h4>REGISTRAR ACTA EN: {{ target_puesto }}</h4>
                 <hr>
                 {# --- Mostrar formulario solo si puede registrar --- #}
                 {% if can_register_in_target_puesto %}
@@ -28,13 +27,13 @@
                         {{ wtf.form_field(obs_form.submit) }}
                     </form>
                 {% else %}
-                    <div class="alert alert-info">
+                    <div class="alert alert-success">
                         <i class="bi bi-info-circle-fill"></i>
-                        Solo puedes ver el libro de actas de este puesto.
+                        No puedes registrar actas en el libro de este puesto.
                         {% if not current_user.get_puestos_asignados_en_barrio(current_barrio) %}
-                            <br>No tienes puestos asignados en este barrio para registrar observaciones.
+                            <br>No tienes puestos asignados en este barrio para registrar Actas.
                         {% else %}
-                            <br>Para registrar una observación, selecciona uno de tus puestos asignados desde el menú "Ver Puesto".
+                            <br>Para registrar un acta, selecciona uno de tus puestos asignados desde el menú "Ver Puesto".
                         {% endif %}
                     </div>
                 {% endif %}
@@ -43,8 +42,7 @@
             <div class="col-md-7">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                      <div>
-                        <h2>Libro de Actas: {{ target_puesto }}</h2> {# Renombrado #}
-                        <p class="mb-0"><small>Barrio: {{ current_barrio }}</small></p>
+                        <h4>LIBRO DE ACTAS: {{ target_puesto }}</h4> {# Renombrado #}
                      </div>
                      {# Menú para cambiar de Puesto #}
                          <div class="dropdown">
@@ -52,7 +50,7 @@
                                 Ver Puesto
                             </button>
                             <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
-                                {% for puesto in available_puestos %} {# Renombrado #}
+                                {% for puesto in available_puestos_for_menu %} {# Renombrado #}
                                     <li><a class="dropdown-item {% if puesto == target_puesto %}active{% endif %}" href="{{ url_for('main.index', puesto=puesto) }}">{{ puesto }}</a></li> {# Renombrado #}
                                 {% endfor %}
                             </ul>
@@ -61,14 +59,15 @@
                 <hr class="mt-0">
 
                 <form action="{{ url_for('main.index') }}" method="get" class="mb-3 row g-2 align-items-center">
+                     {# --- Eliminar el campo de puesto del formulario --- #}
                      <input type="hidden" name="puesto" value="{{ target_puesto }}"> {# Renombrado #}
-                     <div class="col-md-4">
+                     <div class="col-md-3">
                          {{ search_form.query(class="form-control form-control-sm", placeholder="Buscar texto...", value=search_query or '') }}
                      </div>
-                     <div class="col-md-3">
+                     <div class="col-md-2">
                          {{ search_form.start_date(class="form-control form-control-sm", type="date", placeholder="Desde") }}
                      </div>
-                      <div class="col-md-3">
+                      <div class="col-md-2">
                          {{ search_form.end_date(class="form-control form-control-sm", type="date", placeholder="Hasta") }}
                      </div>
                      <div class="col-md-2 d-grid">
@@ -77,14 +76,14 @@
                             <a href="{{ url_for('main.index', puesto=target_puesto) }}" class="btn btn-outline-danger btn-sm mt-1" title="Limpiar Filtros">&times; Limpiar</a> {# Renombrado #}
                          {% endif %}
                      </div>
+                     <div class="col-md-3 d-grid">
+                        {# --- Botón para descargar PDF --- #}
+                        <a href="{{ url_for('main.download_libro_actas_pdf', puesto=target_puesto, query=search_query, start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}" class="btn btn-sm btn-success" target="_blank">
+                            <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+                        </a>
+                    </div>
                 </form>
                 
-                {# Botón para Descargar PDF (se añadirá lógica después) #}
-                <div class="mb-3 text-end col-md-12 text-dark" > 
-                    <a href="{{ url_for('main.download_libro_actas_pdf', puesto=target_puesto, query=search_query, start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}" class="btn btn-sm btn-success" target="_blank">
-                        <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
-                    </a>
-                </div>
 
                 {% set current_obs_date_str = namespace(d=None) %}
                 {% if observations %}
@@ -131,14 +130,55 @@
                 {% else %}
                      <p class="text-muted text-center mt-3">
                          {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
-                             No se encontraron observaciones para los filtros aplicados en {{ target_puesto }}.
+                             No se encontraron Actas para los filtros aplicados en {{ target_puesto }}.
                          {% else %}
-                             No hay observaciones registradas para {{ target_puesto }} todavía.
+                             No hay Actas registradas para {{ target_puesto }} todavía.
                          {% endif %}
                      </p>
                 {% endif %}
             </div>
         </div>
+        {# SCRIPT PARA AUTOCOMPLETAR HORA #}
+        {% if can_register_in_target_puesto %}
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const classificationField = document.getElementById('classification');
+                const observationTimeField = document.getElementById('observation_time');
+                let timeManuallySet = false;
+
+                // Marcar si el usuario modifica la hora manualmente
+                if (observationTimeField) {
+                    observationTimeField.addEventListener('change', function() {
+                        timeManuallySet = true;
+                    });
+                     // También si se hace clic, se considera interacción manual para no sobrescribir.
+                    observationTimeField.addEventListener('focus', function() {
+                        timeManuallySet = true;
+                    });
+                }
+
+                if (classificationField && observationTimeField) {
+                    classificationField.addEventListener('change', function () {
+                        // Solo actualizar si el campo de clasificación tiene un valor
+                        // y si la hora no fue establecida manualmente por el usuario o si el campo de hora está vacío
+                        if (this.value && (!timeManuallySet || observationTimeField.value === '')) {
+                            const now = new Date();
+                            // Formatear a HH:MM (ej. 09:30)
+                            // El servidor ya usa Argentina/Buenos_Aires, el JS usará la zona horaria del cliente
+                            // que para este caso de "hora actual" suele ser lo deseado.
+                            const hours = String(now.getHours()).padStart(2, '0');
+                            const minutes = String(now.getMinutes()).padStart(2, '0');
+                            observationTimeField.value = `${hours}:${minutes}`;
+                            // Después de autocompletar, consideramos que la hora ya no debe ser sobrescrita automáticamente
+                            // a menos que el usuario borre el campo de hora.
+                            timeManuallySet = true; 
+                        }
+                    });
+                }
+            });
+        </script>
+        {% endif %}
+        {# FIN SCRIPT #}
     {% endif %}
 {% endblock %}
 

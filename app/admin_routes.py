@@ -38,7 +38,7 @@ def list_users():
                            title=f'Admin Usuarios ({current_barrio})',
                            users=users, create_form=create_form, current_barrio=current_barrio, UserPuestoAssignment=UserPuestoAssignment)
 
-# Ruta para crear usuario (Modificada para asignar puestos)
+# Ruta para crear usuario 
 @bp.route('/user/create', methods=['POST'])
 @login_required
 @admin_required
@@ -46,6 +46,7 @@ def create_user():
     current_barrio = session['current_barrio']
     create_form = AdminCreateUserForm(current_barrio=current_barrio)
     if create_form.validate_on_submit():
+        print(f"DEBUG: Formulario validado. DNI: {create_form.dni.data}, Puestos: {create_form.puestos.data}")
         user = User(
             dni=create_form.dni.data,
             nombre_completo=create_form.nombre_completo.data,
@@ -58,29 +59,33 @@ def create_user():
         db.session.add(user)
         try:
             db.session.flush() # Obtener user.id
-            # Crear asignaciones de puestos
             for puesto_nombre in create_form.puestos.data:
-                assignment = UserPuestoAssignment(user_id=user.id, barrio=current_barrio, puesto=puesto_nombre)
+                assignment = UserPuestoAssignment(user_id=user.id, barrio=current_barrio, puesto=puesto_nombre, )
                 db.session.add(assignment)
             db.session.commit()
+            print(f"DEBUG: Usuario {user.dni} y asignaciones commiteados.")
             flash(f'Usuario DNI {user.dni} creado y asignado a puestos en {current_barrio}.', 'success')
             return redirect(url_for('admin.list_users'))
         except Exception as e:
              db.session.rollback()
              # ... (manejo de errores existente) ...
+             # print(f"DEBUG: Usuario {user.dni} y asignaciones no commiteados.")
              if 'UNIQUE constraint failed: uq_dni_barrio' in str(e): flash(f'Error: El DNI {create_form.dni.data} ya existe en {current_barrio}.', 'danger')
              elif 'UNIQUE constraint failed: user.email' in str(e): flash('Error: El email ingresado ya existe.', 'danger')
              else: flash(f'Error al crear usuario o asignaciones: {e}', 'danger')
              users = db.session.scalars(db.select(User).where(User.barrio == current_barrio).order_by(User.nombre_completo)).all()
-             return render_template('admin/users.html', title=f'Admin Usuarios ({current_barrio})', users=users, create_form=create_form, current_barrio=current_barrio)
+             return render_template('admin/users.html', title=f'Admin Usuarios ({current_barrio})', users=users, create_form=create_form, current_barrio=current_barrio, UserPuestoAssignment=UserPuestoAssignment)
     else:
-        flash('Por favor, corrige los errores en el formulario de creación.', 'warning')
+        # print(f"DEBUG: Falló la validación del formulario. Errores: {create_form.errors}") # DEBUG
+        # flash('Por favor, corrige los errores en el formulario de creación.', 'warning')
         for fieldName, errorMessages in create_form.errors.items():
             try: label = getattr(create_form, fieldName).label.text
             except AttributeError: label = fieldName.replace('_', ' ').title()
-            for err in errorMessages: flash(f"Error en '{label}': {err}", "danger")
+            # for err in errorMessages: print(f"Error en '{label}': {err}", "danger")
         users = db.session.scalars(db.select(User).where(User.barrio == current_barrio).order_by(User.nombre_completo)).all()
-        return render_template('admin/users.html', title=f'Admin Usuarios ({current_barrio}) - Errores', users=users, create_form=create_form, current_barrio=current_barrio)
+
+
+    return render_template('admin/users.html', title=f'Admin Usuarios ({current_barrio}) - Errores', users=users, create_form=create_form, current_barrio=current_barrio, UserPuestoAssignment=UserPuestoAssignment)
 
 
 # Ruta para editar usuario (Modificada para editar DNI, Nombre, Email y Puestos)
@@ -109,7 +114,7 @@ def edit_user(user_id):
         UserPuestoAssignment.query.filter_by(user_id=user_to_edit.id, barrio=current_barrio_admin).delete()
         # 2. Crear nuevas asignaciones basadas en el checklist
         for puesto_nombre in form.puestos.data:
-            assignment = UserPuestoAssignment(user_id=user_to_edit.id, barrio=current_barrio_admin, puesto=puesto_nombre)
+            assignment = UserPuestoAssignment(user_id=user_to_edit.id, barrio=current_barrio_admin, puesto=puesto_nombre, )
             db.session.add(assignment)
 
         try:
@@ -134,7 +139,7 @@ def edit_user(user_id):
 
     return render_template('admin/edit_user.html',
                            title=f'Editar Usuario ({current_barrio_admin})',
-                           form=form, user_to_edit=user_to_edit, current_barrio=current_barrio_admin)
+                           form=form, user_to_edit=user_to_edit, current_barrio=current_barrio_admin, UserPuestoAssignment=UserPuestoAssignment)
 
 
 # Ruta para eliminar usuario (Modificada para borrar UserPuestoAssignment)
@@ -164,6 +169,27 @@ def delete_user(user_id):
 
 
 # --- Rutas manage_assignments y delete_assignment ELIMINADAS ---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
 
 

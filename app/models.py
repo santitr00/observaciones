@@ -9,8 +9,8 @@ from sqlalchemy import UniqueConstraint
 def load_user(id):
     return db.session.get(User, int(id))
 
-BARRIOS = ['Vida Barrio Cerrado', 'Vida Club de Campo']
-PUESTOS = ['PORTERIA PRINCIPAL', 'PORTERIA SECUNDARIA', 'C.O.M.']
+BARRIOS = ['VIDA BARRIO CERRADO', 'VIDA CLUB DE CAMPO', 'CADAQUES']
+PUESTOS = ['PORTERIA PRINCIPAL', 'PORTERIA SECUNDARIA', 'C.O.M.', 'CONTROL URBANO']
 
 # --- Nuevo Modelo para Asignaciones de Puestos ---
 class UserPuestoAssignment(db.Model):
@@ -18,7 +18,7 @@ class UserPuestoAssignment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     barrio = db.Column(db.String(100), nullable=False, index=True) # Barrio de la asignación
-    puesto = db.Column(db.String(100), nullable=False, index=True) # Puesto asignado
+    puesto = db.Column(db.String(100), nullable=True, index=True) # Puesto asignado
 
     # Constraint para asegurar que la combinación user/barrio/puesto sea única
     __table_args__ = (UniqueConstraint('user_id', 'barrio', 'puesto', name='uq_user_barrio_puesto'),)
@@ -30,10 +30,9 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     dni = db.Column(db.String(20), index=True, nullable=False)
     nombre_completo = db.Column(db.String(128), nullable=False)
-    email = db.Column(db.String(120), index=True, unique=True, nullable=True)
+    email = db.Column(db.String(120), index=True, unique=False, nullable=True)
     password_hash = db.Column(db.String(256))
     barrio = db.Column(db.String(100), nullable=False, index=True) # Barrio principal del registro User
-    zona = db.Column(db.String(100), nullable=False) 
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
 
     # Relación con UserPuestoAssignment
@@ -87,6 +86,15 @@ class Observation(db.Model):
 
     def __repr__(self):
         return f'<Observation {self.id} [{self.classification}] in {self.barrio}-{self.zona} on {self.observation_date}>'
+
+
+
+
+
+
+
+
+
 
 
 

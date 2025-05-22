@@ -94,16 +94,8 @@
 <body>
     <h1>Libro de Actas</h1>
     <h2>Barrio: {{ barrio }} - Puesto: {{ puesto }}</h2>
-    <p class="generation-time">Generado: {{ generation_time.strftime('%d/%m/%Y %H:%M:%S') }}</p>
-
-    {% if query or start_date_str or end_date_str %}
-        <div class="filters-applied">
-            <strong>Filtros Aplicados:</strong><br>
-            {% if query %}Búsqueda: "{{ query }}"<br>{% endif %}
-            {% if start_date_str %}Desde: {{ start_date_str | date_full_local_es }}<br>{% endif %}
-            {% if end_date_str %}Hasta: {{ end_date_str | date_full_local_es }}<br>{% endif %}
-        </div>
-    {% endif %}
+    <p class="generation-time">Generado el: {{ generation_time.strftime('%d/%m/%Y %H:%M:%S') }}</p>
+    
     <hr style="margin-bottom: 15px;">
 
     {% set current_obs_date_str = namespace(d=None) %}
@@ -145,7 +137,7 @@
             </div>
         {% endfor %}
     {% else %}
-        <p>No hay observaciones que coincidan con los filtros aplicados.</p>
+        <p>No hay actas registradas que coincidan con los filtros aplicados.</p>
     {% endif %}
 </body>
 </html>

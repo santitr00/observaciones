@@ -1,16 +1,14 @@
 # app/config.py
 import os
+from datetime import timedelta
 
 basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-# Ya no necesitamos la ruta a instance para la URI de SQLite por defecto
-# instance_path = os.path.join(basedir, 'instance')
-# db_path = os.path.join(instance_path, 'observaciones.db')
-
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'una-clave-secreta-muy-dificil-de-adivinar-pero-cambiala'
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
+    REMEMBER_COOKIE_DURATION = timedelta(minutes=30)
 
     # --- URI para MySQL Local ---
-    # Formato: mysql+pymysql://usuario:contraseña@host/nombre_db
     DB_USER = os.environ.get('DB_USER') or 'adm321'
     DB_PASSWORD = os.environ.get('DB_PASSWORD') or 'aSt6_3237'
     DB_HOST = os.environ.get('DB_HOST') or 'localhost'
