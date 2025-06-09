@@ -100,3 +100,11 @@
 .preserve-newlines {
   white-space: pre-line; /* Respeta saltos de línea y colapsa espacios extra */
 }
+
+.footer {
+    padding: 1rem 0; /* Ya lo tienes con py-3 de Bootstrap, pero puedes ajustar aquí */
+    background-color: #f8f9fa; /* Ya lo tienes con bg-light de Bootstrap */
+    text-align: center; /* Ya lo tienes con text-center de Bootstrap */
+    border-top: 1px solid #e7e7e7;
+    /* Elimina 'position', 'bottom' y 'width' si usas Flexbox para el sticky footer */
+}

@@ -1,6 +1,6 @@
 # app/__init__.py
 import os
-from flask import Flask
+from flask import Flask, redirect, url_for, flash
 from .config import Config
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
@@ -82,12 +82,18 @@ def format_date_full_local_es(date_value):
             return dt_local_to_format.strftime('%Y-%m-%d')
         else:
             return str(dt_local_to_format) + " (Error Locale/Format)"
+        
+@login.unauthorized_handler
+def unauthorized():
+    flash('Tu sesión ha expirado. Por favor, selecciona un barrio e inicia sesión de nuevo.', 'warning')
+    # Redirige a la página de selección de barrio
+    return redirect(url_for('main.select_barrio'))
 
 
 def create_app(config_class=Config):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_class)
-
+    locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
     try:
         os.makedirs(app.instance_path, exist_ok=True)
         if 'UPLOAD_FOLDER' in app.config:

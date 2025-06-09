@@ -72,6 +72,12 @@ def login():
 
     return render_template('login.html', title=f'Login - {selected_barrio}', form=form, barrio=selected_barrio)
 
+PREDEFINED_BODY_TEXTS = {
+    "INICIO JORNADA": "Recibo la guardia al tanto de las novedades que anteceden y con el puesto laboral en condiciones. ",
+    "FIN JORNADA": "Se entrego la guardia con las novedades que anteceden y el puesto laboral en condiciones. ",
+    "INICIO CORTE DE LUZ": "Se produce un corte de energía eléctrica, sin previo aviso. Los grupos electrógenos inician correctamente. ",
+    "FIN CORTE DE LUZ": "Se restablece el servicio eléctrico de EPE. ",
+}
 # Ruta Index (Modificada)
 @bp.route('/', methods=['GET', 'POST'])
 @bp.route('/index', methods=['GET', 'POST'])
@@ -82,27 +88,50 @@ def index():
         flash('Error de sesión. Por favor, inicia sesión de nuevo.', 'danger')
         return redirect(url_for('main.logout'))
 
-    # Obtener los nombres de los puestos a los que el usuario está asignado EN ESTE BARRIO
-    # Usamos el método del modelo User que ya teníamos
+    # Obtener los nombres de los puestos a los que el usuario está ASIGNADO en este barrio.
+    # Esta lista determina DÓNDE PUEDE REGISTRAR (editar) actas.
     puestos_asignados_al_usuario_en_barrio = current_user.get_puestos_asignados_en_barrio(current_barrio)
 
-    # Determinar la zona/puesto a mostrar
-    # Si el usuario tiene puestos asignados, el default es el primero de ellos.
-    # Si no tiene puestos asignados, el default es el primer puesto de la lista global PUESTOS.
-    if puestos_asignados_al_usuario_en_barrio:
-        default_puesto_display = puestos_asignados_al_usuario_en_barrio[0]
-    elif PUESTOS:
-        default_puesto_display = PUESTOS[0]
+    # Determinar qué puestos se mostrarán en el menú desplegable (DÓNDE PUEDE VER).
+    # Si el usuario tiene el permiso 'can_view_all_puestos', verá TODOS los puestos.
+    # De lo contrario, solo verá los puestos a los que está asignado.
+    if current_user.can_view_all_puestos:
+        available_puestos_for_menu = PUESTOS
     else:
-        default_puesto_display = "N/A" # Caso extremo: no hay puestos definidos
+        available_puestos_for_menu = puestos_asignados_al_usuario_en_barrio
 
+    # Si después de aplicar la lógica de visualización, no hay puestos disponibles para el usuario,
+    # se le informa y se le muestra una página de índice sin contenido.
+    if not available_puestos_for_menu:
+        return render_template('index.html',
+                               title=f'Libro: {current_barrio} - Sin Acceso',
+                               obs_form=None, # Deshabilita el formulario de observación
+                               search_form=None, # Deshabilita el formulario de búsqueda
+                               observations=[], # No hay observaciones que mostrar
+                               current_barrio=current_barrio,
+                               target_puesto="N/A", # No hay puesto objetivo válido
+                               available_puestos_for_menu=[], # El menú estará vacío o no se mostrará
+                               can_register_in_target_puesto=False, # No puede registrar en ningún puesto
+                               search_query="",
+                               predefined_body_texts={})
+
+
+    # Determinar el puesto actual a mostrar.
+    # Se toma el puesto de la URL o el primer puesto disponible para el usuario como predeterminado.
+    default_puesto_display = available_puestos_for_menu[0]
     requested_puesto = request.args.get('puesto', default=default_puesto_display, type=str)
-    # La zona/puesto que se está viendo puede ser cualquiera de la lista global PUESTOS
-    target_puesto = requested_puesto if requested_puesto in PUESTOS else default_puesto_display
-    if requested_puesto not in PUESTOS and requested_puesto != default_puesto_display:
-         flash(f'Puesto "{requested_puesto}" no válido. Mostrando puesto por defecto.', 'warning')
 
-    # --- Determinar si el usuario puede registrar en el target_puesto ---
+    # El puesto objetivo es el solicitado si el usuario tiene permiso para VERLO.
+    # De lo contrario, se redirige al puesto por defecto que sí puede ver.
+    if requested_puesto in available_puestos_for_menu:
+        target_puesto = requested_puesto
+    else:
+        target_puesto = default_puesto_display
+        if requested_puesto != default_puesto_display: # Evitar mensaje si el default ya es el solicitado
+             flash(f'No tienes permiso para ver el libro de actas del puesto "{requested_puesto}". Mostrando puesto por defecto: "{default_puesto_display}".', 'warning')
+
+    # Determinar si el usuario PUEDE REGISTRAR ACTAS en el puesto actualmente visualizado (`target_puesto`).
+    # Esto sigue basándose EXCLUSIVAMENTE en si el puesto está en sus asignaciones directas.
     can_register_in_target_puesto = target_puesto in puestos_asignados_al_usuario_en_barrio
 
     obs_form = ObservationForm()
@@ -164,14 +193,15 @@ def index():
                 return redirect(url_for('main.select_barrio')) 
             else:
                 # Si no es "FIN JORNADA", mostrar mensaje de éxito normal
-                flash('¡Actas registrada con éxito!', 'success')
+                flash('¡Acta registrada con éxito!', 'success')
                 return redirect(url_for('main.index', puesto=target_puesto))
     
     
 
     # Obtener Observaciones
     observations = []
-    if target_puesto: # Solo buscar si hay un target_puesto válido
+    # Solo buscar observaciones si el target_puesto es válido y está en la lista de los que el usuario puede ver
+    if target_puesto and target_puesto in available_puestos_for_menu:
         observations_query = db.select(Observation).where(Observation.barrio == current_barrio, Observation.zona == target_puesto)
         if query:
             search_term = f"%{query}%"
@@ -182,8 +212,7 @@ def index():
              observations_query = observations_query.where(Observation.observation_date <= search_form.end_date.data)
         observations = db.session.scalars(observations_query.order_by(Observation.observation_date.desc(), Observation.observation_time.desc())).all()
 
-    # Para el menú desplegable, mostrar todos los PUESTOS globales
-    available_puestos_for_menu = PUESTOS
+    # available_puestos_for_menu ya se determinó arriba con la lógica de 'can_view_all_puestos'
 
     return render_template('index.html',
                            title=f'Libro: {current_barrio} - {target_puesto}',
@@ -192,9 +221,10 @@ def index():
                            observations=observations,
                            current_barrio=current_barrio,
                            target_puesto=target_puesto,
-                           available_puestos_for_menu=available_puestos_for_menu, # Para el menú
+                           available_puestos_for_menu=available_puestos_for_menu, # Se pasa la lista ya filtrada
                            can_register_in_target_puesto=can_register_in_target_puesto, # Para habilitar/deshabilitar form
-                           search_query=query)
+                           search_query=query,
+                           predefined_body_texts=PREDEFINED_BODY_TEXTS)
 
 
 
@@ -207,15 +237,18 @@ def download_libro_actas_pdf():
         return redirect(url_for('main.logout'))
 
     # Obtener parámetros de filtro de la URL (los mismos que usa index)
-    target_puesto = request.args.get('puesto', PUESTOS[0] if PUESTOS else 'Default', type=str)
+    requested_puesto = request.args.get('puesto', PUESTOS[0] if PUESTOS else 'Default', type=str) # Mantener como requested
     query = request.args.get('query', '').strip()
     start_date_str = request.args.get('start_date', '')
     end_date_str = request.args.get('end_date', '')
 
-    # Validar puesto (opcional, pero bueno)
-    if target_puesto not in PUESTOS:
-        target_puesto = PUESTOS[0] if PUESTOS else 'Default'
+    # Validar que el usuario tenga permisos para descargar PDF de este puesto
+    puestos_visibles_para_usuario = current_user.get_puestos_asignados_en_barrio(current_barrio) #
+    if requested_puesto not in puestos_visibles_para_usuario: #
+        flash(f'No tienes permiso para descargar el PDF del puesto "{requested_puesto}".', 'danger') #
+        return redirect(url_for('main.index')) #
 
+    target_puesto = requested_puesto # Si pasó la validación, el requested_puesto es el target_puesto válido
 
     # Obtener Actas Filtradas (misma lógica que en index)
     observations_query = db.select(Observation).where(
@@ -233,7 +266,7 @@ def download_libro_actas_pdf():
         except ValueError: flash('Fecha "desde" inválida.', 'warning')
     if end_date_str:
         try: end_date_obj = date.fromisoformat(end_date_str)
-        except ValueError: flash('Fecha "hasta" inválida.', 'warning')
+        except ValueError: flash('Fecha "hasta" inválido.', 'warning')
 
     if start_date_obj:
          observations_query = observations_query.where(Observation.observation_date >= start_date_obj)
@@ -268,6 +301,7 @@ def download_libro_actas_pdf():
         flash("Error al generar el PDF. Por favor, intente de nuevo.", "danger")
         # Redirigir a la página anterior o a index
         return redirect(request.referrer or url_for('main.index', puesto=target_puesto))
+
 
 # Ruta Logout
 @bp.route('/logout')

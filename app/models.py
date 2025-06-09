@@ -9,8 +9,8 @@ from sqlalchemy import UniqueConstraint
 def load_user(id):
     return db.session.get(User, int(id))
 
-BARRIOS = ['VIDA BARRIO CERRADO', 'VIDA CLUB DE CAMPO', 'CADAQUES']
-PUESTOS = ['PORTERIA PRINCIPAL', 'PORTERIA SECUNDARIA', 'C.O.M.', 'CONTROL URBANO']
+BARRIOS = ['VIDA BARRIO CERRADO', 'VIDA CLUB DE CAMPO', 'CADAQUES', 'VIDA LAGOON']
+PUESTOS = ['PORTERIA PRINCIPAL', 'PORTERIA SECUNDARIA', 'C.O.M.', 'CONTROL URBANO', 'ADMINISTARCION']
 
 # --- Nuevo Modelo para Asignaciones de Puestos ---
 class UserPuestoAssignment(db.Model):
@@ -44,6 +44,7 @@ class User(UserMixin, db.Model):
                                         lazy='dynamic',
                                         cascade="all, delete-orphan"
     )
+    can_view_all_puestos = db.Column(db.Boolean, default=False, nullable=False)
 
     observations = db.relationship('Observation', backref='author', lazy='dynamic')
 
@@ -75,7 +76,7 @@ class User(UserMixin, db.Model):
 class Observation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     classification = db.Column(db.String(100), nullable=False)
-    body = db.Column(db.String(500), nullable=False)
+    body = db.Column(db.String(800), nullable=False)
     observation_date = db.Column(db.Date, nullable=False, index=True)
     observation_time = db.Column(db.Time, nullable=False)
     timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))

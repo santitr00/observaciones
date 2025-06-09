@@ -7,13 +7,15 @@
             <div class="card shadow-sm">
                 <div class="card-header text-center bg-primary-green text-white">
                     {% if barrio == 'VIDA BARRIO CERRADO' %}
-                        <img src="{{ url_for('static', filename='images/blogo.jpg') }}" alt="" style="max-height: 50px; margin-bottom: 5px;">
+                        <img src="{{ url_for('static', filename='images/LOGO_VBC.png') }}" alt="" style="max-height: 150px; margin-bottom: 5px;">
                     {% elif barrio ==  'VIDA CLUB DE CAMPO' %}
-                        <img src="{{ url_for('static', filename='images/blogo.jpg') }}" alt="" style="max-height: 50px; margin-bottom: 5px;">
+                        <img src="{{ url_for('static', filename='images/LOGO_VCC.png') }}" alt="" style="max-height: 150px; margin-bottom: 5px;">
                     {% elif barrio == 'CADAQUES' %}
-                        <img src="{{ url_for('static', filename='images/cadaq.jpg') }}" alt="" style="max-height: 50px; margin-bottom: 5px;">
+                        <img src="{{ url_for('static', filename='images/LOGO_CADAQ.png') }}" alt="" style="max-height: 100px; margin-bottom: 5px;">
+                    {% elif barrio == 'VIDA LAGOON' %}
+                        <img src="{{ url_for('static', filename='images/LOGO_VLAG.png') }}" alt="" style="max-height: 150px; margin-bottom: 5px;">
                     {% else %}
-                        <img src="{{ url_for('static', filename='images/index.png') }}" alt="" style="max-height: 50px; margin-bottom: 5px;">
+                        <img src="{{ url_for('static', filename='images/index.png') }}" alt="" style="max-height: 150px; margin-bottom: 5px;">
                     {% endif %}
                      <h4 class="mb-0" style="color: black;">Login - {{ barrio }}</h4>
                 </div>

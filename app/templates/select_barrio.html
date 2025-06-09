@@ -6,10 +6,11 @@
         <div class="col-md-6 col-lg-5">
             <div class="card shadow-sm">
                  <div class="card-header text-center bg-primary-green text-white">
-                     <img src="{{ url_for('static', filename='images/index.png') }}" alt="Logo" style="max-height: 50px; margin-bottom: 5px;">
-                     <h4 class="mb-0" style="color: black;">Seleccionar Barrio</h4>
+                     <img src="{{ url_for('static', filename='images/index.png') }}" alt="Logo" style="max-height: 150px;">
+                     
                 </div>
-                <div class="card-body p-4">
+                <div class="card-body p-4 mb-4">
+                    <h2 class="text-center mb-4">Seleccionar Barrio</h2>
                     <p class="text-center">Por favor, selecciona el barrio al que deseas ingresar.</p>
                     <form method="post" action="{{ url_for('main.select_barrio') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -24,6 +25,11 @@
                         </div>
                         <div class="d-grid mt-4">
                             <button type="submit" class="btn btn-primary btn-lg">Siguiente</button>
+                        </div>
+                        <div class="text-center mt-3">
+                            <a href="{{ url_for('static', filename='manual_de_usuario.pdf') }}" target="_blank" class="btn text-center mt-3 align-items-center" style="background-color: #f8f9fa; color: #343a40; text-decoration: none;">
+                                <i class="bi bi-filetype-pdf"></i> Descargar Manual del Usuario
+                            </a>
                         </div>
                     </form>
                 </div>

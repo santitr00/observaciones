@@ -4,9 +4,9 @@ from datetime import timedelta
 
 basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'una-clave-secreta-muy-dificil-de-adivinar-pero-cambiala'
-    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)
-    REMEMBER_COOKIE_DURATION = timedelta(minutes=30)
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'aSt6_3237'
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)  # Duración de la sesión permanente
+    REMEMBER_COOKIE_DURATION = timedelta(minutes=30)  # Duración de la cookie "remember me"
 
     # --- URI para MySQL Local ---
     DB_USER = os.environ.get('DB_USER') or 'adm321'
@@ -21,3 +21,5 @@ class Config:
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(basedir, 'instance', 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024 # Límite de 16MB
     DEBUG = os.environ.get('FLASK_DEBUG', '1') == '1'
+
+    

@@ -45,14 +45,15 @@ class ObservationForm(FlaskForm):
         ('FIN JORNADA', 'FIN JORNADA'),
         ('CONSTANCIA', 'CONSTANCIA'),
         ('ORDEN', 'ORDEN'),
-        ('CAMBIO FECHA', 'CAMBIO FECHA'),
+        ('INICIO CORTE DE LUZ', 'INICIO CORTE DE LUZ'),
+        ('FIN CORTE DE LUZ', 'FIN CORTE DE LUZ')
     ]
-    classification = SelectField('Clasificación', choices=classification_choices, validators=[DataRequired(message="La clasificación es obligatoria.")])
+    classification = SelectField('Clasificación', choices=classification_choices, validators=[DataRequired(message="La clasificación es obligatoria.")], render_kw={'id': 'classification-field'})
     observation_date = DateField('Fecha del Evento', format='%Y-%m-%d', validators=[DataRequired(message="La fecha es obligatoria."), date_check])
     observation_time = TimeField('Hora del Evento', format='%H:%M', validators=[DataRequired(message="La hora es obligatoria.")])
-    body = TextAreaField('Descripción', validators=[DataRequired(message="ES obligatorio agregar una descripción"), Length(min=5, max=500)], render_kw={"rows": 4})
+    body = TextAreaField('Descripción', validators=[DataRequired(message="la descripción es obligatoria"), Length(min=5, max=2000, message='La descripcion solo puede tener entre 5 y 2000')], render_kw={"rows": 4, 'id': 'body-field'})
     attachment = FileField('Adjuntar Archivo (Opcional)', validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx'], '¡Solo imágenes o documentos!')])
-    submit = SubmitField('Registrar Observación')
+    submit = SubmitField('Registrar Acta')
 
 # --- Formulario de Búsqueda ---
 class SearchForm(FlaskForm):
@@ -68,14 +69,15 @@ class EditUserForm(FlaskForm):
         Regexp('^[0-9]+$', message='El DNI solo debe contener números.'),
         Length(min=8, max=8, message='El DNI debe tener exactamente 8 dígitos.')
     ])
-    nombre_completo = StringField('Nombre y Apellido', validators=[DataRequired(), Length(max=128)])
-    email = EmailField('Email (Opcional)', validators=[Optional(), Length(max=120), Email()])
+    nombre_completo = StringField('Nombre y Apellido', validators=[DataRequired(), Length(max=128, message='El Nombre y Apellido no puede superar los 128 caracteres.')])
+    email = EmailField('Email (Opcional)', validators=[Optional(), Length(max=120), Email(message='Debe ingresar un email válido.')])
     # --- ASEGURARSE QUE ESTE CAMPO ESTÉ PRESENTE Y CORRECTO ---
     puestos = MultiCheckboxField(
         'Puestos Asignados',
         choices=[(p, p) for p in PUESTOS],
         validators= [Optional()]
     )
+    can_view_all_puestos = BooleanField('Puede ver todos los libros de actas')
     # --------------------------------------------------------
     password = PasswordField('Nueva Contraseña (dejar en blanco para no cambiar)', validators=[Optional(), Length(min=8, message='La contraseña debe tener al menos 8 dígitos.')])
     password2 = PasswordField('Repetir Nueva Contraseña', validators=[EqualTo('password', message='Las contraseñas deben coincidir.')])
@@ -114,9 +116,9 @@ class AdminCreateUserForm(FlaskForm):
         Length(min=8, max=8, message='El DNI debe tener exactamente 8 dígitos.') # Exactamente 8
     ])
     nombre_completo = StringField('Nombre y Apellido', validators=[DataRequired(message='Es necesario crear el usuario con Nombre y Apellido.'), Length(max=128)])
-    email = EmailField('Email (Opcional)', validators=[Optional(), Length(max=120), Email()])
+    email = EmailField('Email (Opcional)', validators=[Optional(), Length(max=120, message='El Email supera el maximo de caracteres permitido'), Email(message='Debe ingresar un email válido.')])
     puestos = MultiCheckboxField('Puestos a Asignar', choices=[(p, p) for p in PUESTOS], validators= [Optional()]) 
-
+    can_view_all_puestos = BooleanField('Puede ver todos los libros de actas')
     password = PasswordField('Contraseña', validators=[
         DataRequired(message="La contraseña es obligatoria. "),
         Length(min=8, message='La contraseña debe tener al menos 8 caracteres. '),
@@ -153,9 +155,15 @@ class AdminCreateUserForm(FlaskForm):
 
 # --- Formulario para Cambiar Contraseña (Usuario) ---
 class ChangePasswordForm(FlaskForm):
-    current_password = PasswordField('Contraseña Actual', validators=[DataRequired()])
-    new_password = PasswordField('Nueva Contraseña', validators=[DataRequired(), Length(min=6)])
-    new_password2 = PasswordField('Repetir Nueva Contraseña', validators=[DataRequired(), EqualTo('new_password', message='Las nuevas contraseñas deben coincidir.')])
+    current_password = PasswordField('Contraseña Actual', validators=[DataRequired(message='Es obligatorio introducir la contraseña actual.')])
+    new_password = PasswordField('Nueva Contraseña', validators=[
+        DataRequired(message="La contraseña es obligatoria. "),
+        Length(min=8, message='La contraseña debe tener al menos 8 caracteres. '),
+        Regexp(r'.*[a-z]', message='La contraseña debe contener al menos una letra minúscula. '),
+        Regexp(r'.*[A-Z]', message='La contraseña debe contener al menos una letra mayúscula. '),
+        Regexp(r'.*[0-9]', message='La contraseña debe contener al menos un número.')
+    ])
+    new_password2 = PasswordField('Repetir Nueva Contraseña', validators=[DataRequired(message='Es obligatorio repetir la nueva contraseña'), EqualTo('new_password', message='Las nuevas contraseñas deben coincidir.')])
     submit = SubmitField('Cambiar Contraseña')
 
 

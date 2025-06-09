@@ -52,7 +52,8 @@ def create_user():
             nombre_completo=create_form.nombre_completo.data,
             email=create_form.email.data or None,
             barrio=current_barrio,
-            is_admin=create_form.is_admin.data
+            is_admin=create_form.is_admin.data,
+            can_view_all_puestos=create_form.can_view_all_puestos.data 
             # Ya no se asigna 'zona' directamente a User
         )
         user.set_password(create_form.password.data)
@@ -76,7 +77,7 @@ def create_user():
              users = db.session.scalars(db.select(User).where(User.barrio == current_barrio).order_by(User.nombre_completo)).all()
              return render_template('admin/users.html', title=f'Admin Usuarios ({current_barrio})', users=users, create_form=create_form, current_barrio=current_barrio, UserPuestoAssignment=UserPuestoAssignment)
     else:
-        # print(f"DEBUG: Falló la validación del formulario. Errores: {create_form.errors}") # DEBUG
+        print(f"DEBUG: Falló la validación del formulario. Errores: {create_form.errors}") # DEBUG
         # flash('Por favor, corrige los errores en el formulario de creación.', 'warning')
         for fieldName, errorMessages in create_form.errors.items():
             try: label = getattr(create_form, fieldName).label.text
@@ -106,6 +107,7 @@ def edit_user(user_id):
         user_to_edit.nombre_completo = form.nombre_completo.data
         user_to_edit.email = form.email.data or None
         user_to_edit.is_admin = form.is_admin.data # Permiso de admin para este barrio/user
+        user_to_edit.can_view_all_puestos = form.can_view_all_puestos.data # Permiso para ver todos los puestos
         if form.password.data:
              user_to_edit.set_password(form.password.data)
 
@@ -135,6 +137,7 @@ def edit_user(user_id):
         # Precargar los puestos asignados
         assigned_puestos = [assign.puesto for assign in user_to_edit.puestos_asignados.filter_by(barrio=current_barrio_admin).all()]
         form.puestos.data = assigned_puestos
+        form.can_view_all_puestos.data = user_to_edit.can_view_all_puestos
 
 
     return render_template('admin/edit_user.html',
