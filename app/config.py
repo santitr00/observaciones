@@ -5,16 +5,16 @@ from datetime import timedelta
 basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'aSt6_3237'
-    PERMANENT_SESSION_LIFETIME = timedelta(minutes=30)  # Duración de la sesión permanente
-    REMEMBER_COOKIE_DURATION = timedelta(minutes=30)  # Duración de la cookie "remember me"
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=300)  # Duración de la sesión permanente
+    REMEMBER_COOKIE_DURATION = timedelta(minutes=3000)  # Duración de la cookie "remember me"
 
     # --- URI para MySQL Local ---
     DB_USER = os.environ.get('DB_USER') or 'adm321'
     DB_PASSWORD = os.environ.get('DB_PASSWORD') or 'aSt6_3237'
     DB_HOST = os.environ.get('DB_HOST') or 'localhost'
-    DB_NAME = os.environ.get('DB_NAME') or 'app_actas'
+    DB_NAME = os.environ.get('DB_NAME') or 'app_lad'
 
-    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://adm321:aSt6_3237@localhost:3306/app_actas'
+    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://adm321:aSt6_3237@localhost:3306/app_lad'
     # -----------------------------
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False

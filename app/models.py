@@ -1,110 +1,103 @@
 # app/models.py
-from app import db, login
+
+from . import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timezone, time
-from sqlalchemy import UniqueConstraint
+from datetime import datetime, timezone
 
-@login.user_loader
-def load_user(id):
-    return db.session.get(User, int(id))
-
-BARRIOS = ['VIDA BARRIO CERRADO', 'VIDA CLUB DE CAMPO', 'CADAQUES', 'VIDA LAGOON']
-PUESTOS = ['PORTERIA PRINCIPAL', 'PORTERIA SECUNDARIA', 'C.O.M.', 'CONTROL URBANO', 'ADMINISTARCION']
-
-# --- Nuevo Modelo para Asignaciones de Puestos ---
-class UserPuestoAssignment(db.Model):
-    __tablename__ = 'user_puesto_assignment'
+class Plan(db.Model):
+    __tablename__ = 'planes'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
-    barrio = db.Column(db.String(100), nullable=False, index=True) # Barrio de la asignación
-    puesto = db.Column(db.String(100), nullable=True, index=True) # Puesto asignado
+    nombre = db.Column(db.String(100), unique=True, nullable=False)
+    precio = db.Column(db.Integer, nullable=False)
+    puede_crear_puestos = db.Column(db.Boolean, default=False, nullable=False)
+    organizaciones = db.relationship('Organizacion', back_populates='plan', lazy='dynamic')
 
-    # Constraint para asegurar que la combinación user/barrio/puesto sea única
-    __table_args__ = (UniqueConstraint('user_id', 'barrio', 'puesto', name='uq_user_barrio_puesto'),)
-
-    def __repr__(self):
-        return f'<UserPuestoAssignment User {self.user_id} to {self.barrio} - {self.puesto}>'
-
-class User(UserMixin, db.Model):
+class Organizacion(db.Model):
+    __tablename__ = 'organizaciones'
     id = db.Column(db.Integer, primary_key=True)
-    dni = db.Column(db.String(20), index=True, nullable=False)
+    nombre = db.Column(db.String(150), nullable=False)
+    plan_id = db.Column(db.Integer, db.ForeignKey('planes.id'), nullable=False)
+    plan = db.relationship('Plan', back_populates='organizaciones')
+    usuarios = db.relationship('Usuario', back_populates='organizacion', lazy='dynamic')
+
+class Rol(db.Model):
+    __tablename__ = 'roles'
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(64), unique=True, nullable=False)
+    usuarios = db.relationship('Usuario', back_populates='rol', lazy='dynamic')
+
+class Barrio(db.Model):
+    __tablename__ = 'barrios'
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(100), unique=True, nullable=False)
+    zona = db.Column(db.String(50), nullable=True)
+    puestos = db.relationship('Puesto', back_populates='barrio', lazy='dynamic', cascade="all, delete-orphan")
+    admins = db.relationship('Usuario', back_populates='barrio_admin', lazy='dynamic')
+
+class Puesto(db.Model):
+    __tablename__ = 'puestos'
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(150), nullable=False)
+    barrio_id = db.Column(db.Integer, db.ForeignKey('barrios.id'), nullable=False)
+    barrio = db.relationship('Barrio', back_populates='puestos')
+    actas = db.relationship('Acta', back_populates='puesto', lazy='dynamic', cascade="all, delete-orphan")
+    permisos = db.relationship('PermisoPuesto', back_populates='puesto', cascade="all, delete-orphan")
+
+class PermisoPuesto(db.Model):
+    __tablename__ = 'permisos'
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    puesto_id = db.Column(db.Integer, db.ForeignKey('puestos.id'), nullable=False)
+    puede_ver = db.Column(db.Boolean, default=True, nullable=False)
+    puede_editar = db.Column(db.Boolean, default=False, nullable=False)
+    usuario = db.relationship('Usuario', back_populates='permisos')
+    puesto = db.relationship('Puesto', back_populates='permisos')
+    __table_args__ = (db.UniqueConstraint('usuario_id', 'puesto_id', name='_usuario_puesto_uc'),)
+
+class Usuario(UserMixin, db.Model):
+    __tablename__ = 'usuarios'
+    id = db.Column(db.Integer, primary_key=True)
+    dni = db.Column(db.String(15), unique=True, nullable=False, index=True)
     nombre_completo = db.Column(db.String(128), nullable=False)
-    email = db.Column(db.String(120), index=True, unique=False, nullable=True)
+    email = db.Column(db.String(120), unique=True, nullable=True, index=True)
     password_hash = db.Column(db.String(256))
-    barrio = db.Column(db.String(100), nullable=False, index=True) # Barrio principal del registro User
-    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    rol_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=False)
+    organizacion_id = db.Column(db.Integer, db.ForeignKey('organizaciones.id'), nullable=False)
+    barrio_admin_id = db.Column(db.Integer, db.ForeignKey('barrios.id'), nullable=True)
+    rol = db.relationship('Rol', back_populates='usuarios')
+    organizacion = db.relationship('Organizacion', back_populates='usuarios')
+    barrio_admin = db.relationship('Barrio', back_populates='admins')
+    actas = db.relationship('Acta', backref='autor', lazy='dynamic')
+    permisos = db.relationship('PermisoPuesto', back_populates='usuario', cascade="all, delete-orphan")
 
-    # Relación con UserPuestoAssignment
-    # Un registro User (DNI+Barrio) puede tener varios puestos asignados en ESE barrio
-    puestos_asignados = db.relationship('UserPuestoAssignment',
-                                        foreign_keys=[UserPuestoAssignment.user_id],
-                                        primaryjoin="and_(User.id==UserPuestoAssignment.user_id, User.barrio==UserPuestoAssignment.barrio)",
-                                        backref=db.backref('assigned_user_record', lazy='select'),
-                                        lazy='dynamic',
-                                        cascade="all, delete-orphan"
-    )
-    can_view_all_puestos = db.Column(db.Boolean, default=False, nullable=False)
+    @property
+    def password(self):
+        raise AttributeError('password no es un atributo legible.')
 
-    observations = db.relationship('Observation', backref='author', lazy='dynamic')
-
-    __table_args__ = (UniqueConstraint('dni', 'barrio', name='uq_dni_barrio'),)
-
-    def set_password(self, password):
+    @password.setter
+    def password(self, password):
         self.password_hash = generate_password_hash(password)
 
-    def check_password(self, password):
+    def verify_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    # Método para obtener los nombres de los puestos asignados en el barrio actual del User
-    def get_puestos_asignados_en_barrio(self, barrio_a_consultar):
-            if not barrio_a_consultar:
-                return []
-            asignaciones = db.session.scalars(
-                db.select(UserPuestoAssignment.puesto).where(
-                    UserPuestoAssignment.user_id == self.id,
-                    UserPuestoAssignment.barrio == barrio_a_consultar
-                )
-            ).all()
-            return asignaciones
+    @property
+    def is_admin(self):
+        # Un admin de barrio o un super admin
+        return self.rol and (self.rol.nombre == 'Administrador' or self.rol.nombre == 'Super Admin')
 
-    def __repr__(self):
-        admin_status = " (Admin)" if self.is_admin else ""
-        return f'<User {self.nombre_completo} (DNI: {self.dni}) [{self.barrio}]{admin_status}>'
-
-
-class Observation(db.Model):
+class Acta(db.Model):
+    __tablename__ = 'actas'
     id = db.Column(db.Integer, primary_key=True)
-    classification = db.Column(db.String(100), nullable=False)
-    body = db.Column(db.String(800), nullable=False)
-    observation_date = db.Column(db.Date, nullable=False, index=True)
-    observation_time = db.Column(db.Time, nullable=False)
-    timestamp = db.Column(db.DateTime, index=True, default=lambda: datetime.now(timezone.utc))
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    barrio = db.Column(db.String(100), nullable=False, index=True)
-    zona = db.Column(db.String(100), nullable=False, index=True) # 'zona' aquí es el puesto de la observación
-    filename = db.Column(db.String(200), nullable=True)
+    classification = db.Column(db.String(128))
+    body = db.Column(db.Text)
+    fecha_creacion = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+    puesto_id = db.Column(db.Integer, db.ForeignKey('puestos.id'))
+    puesto = db.relationship('Puesto', back_populates='actas')
+    documento_url = db.Column(db.String(512))
 
-    def __repr__(self):
-        return f'<Observation {self.id} [{self.classification}] in {self.barrio}-{self.zona} on {self.observation_date}>'
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(Usuario, int(user_id))

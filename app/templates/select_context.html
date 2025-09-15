@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4 mb-4">
+                <h2 class="text-center mb-4">Bienvenido, {{ current_user.nombre_completo }}</h2>
+                <p class="text-center text-muted">Tienes acceso a varios contextos. Por favor, selecciona con cuál deseas trabajar.</p>
+                
+                <form method="post" action="{{ url_for('main.select_context') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label for="barrio" class="form-label">Contexto de Trabajo:</label>
+                        <select class="form-select form-select-lg" id="barrio" name="barrio" required autofocus>
+                            <option value="" selected disabled>-- Elige una opción --</option>
+                            {% for b in barrios %}
+                                <option value="{{ b.id }}">{{ b.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">Ingresar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

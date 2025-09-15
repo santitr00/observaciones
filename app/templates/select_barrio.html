@@ -13,14 +13,13 @@
                     <h2 class="text-center mb-4">Seleccionar Barrio</h2>
                     <p class="text-center">Por favor, selecciona el barrio al que deseas ingresar.</p>
                     <form method="post" action="{{ url_for('main.select_barrio') }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="barrio" class="form-label">Barrio:</label>
                             <select class="form-select" id="barrio" name="barrio" required autofocus>
                                 <option value="" selected disabled>-- Elige un barrio --</option>
                                 {% for b in barrios %}
-                                    <option value="{{ b }}">{{ b }}</option>
-                                {% endfor %}
+                                    <option value="{{ b.id }}">{{ b.nombre }}</option>
+                                    {% endfor %}
                             </select>
                         </div>
                         <div class="d-grid mt-4">

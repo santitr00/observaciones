@@ -1,33 +1,92 @@
 {% extends "base.html" %}
-{% import "bootstrap_wtf.html" as wtf %}
 
 {% block content %}
-    <h2 class="justify-content-center text-center">Editar Usuario: {{ user_to_edit.nombre_completo or user_to_edit.dni }} ({{ current_barrio }})</h2>
-    <hr>
+<div class="container mt-4">
     <div class="row justify-content-center">
-        <div class="col-md-6">
-             <div class="card shadow-sm">
-                 <div class="card-body">
-                    <form action="" method="post" novalidate>
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h3>Editar Usuario: <strong>{{ user.nombre_completo }}</strong></h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.edit_user', user_id=user.id) }}" novalidate>
                         {{ form.hidden_tag() }}
-                        {# Mostrar Username (no editable) #}
-                        {# --- DNI ahora editable usando wtf.form_field --- #}
-                        {{ wtf.form_field(form.dni) }}
-                        {{ wtf.form_field(form.nombre_completo) }}
-                        {{ wtf.form_field(form.email) }}
-                        {{ wtf.form_field(form.puestos) }} {# Checklist para Puestos #}
-                        {{ wtf.form_field(form.can_view_all_puestos) }}
-                        {{ wtf.form_field(form.password) }}
-                        {{ wtf.form_field(form.password2) }}
-                        {{ wtf.form_field(form.is_admin) }}
-                        <div class="text-center mt-3">
-                            {{ wtf.form_field(form.submit) }}
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.dni.label(class="form-label") }}
+                                {{ form.dni(class="form-control" + (" is-invalid" if form.dni.errors else "")) }}
+                                {% for error in form.dni.errors %}
+                                    <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.nombre_completo.label(class="form-label") }}
+                                {{ form.nombre_completo(class="form-control" + (" is-invalid" if form.nombre_completo.errors else "")) }}
+                                {% for error in form.nombre_completo.errors %}
+                                    <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.email.label(class="form-label") }}
+                            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
+                            {% for error in form.email.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <hr>
+                        <p class="text-muted">Cambiar contraseña (dejar en blanco para no modificar)</p>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.password.label(class="form-label") }}
+                                {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
+                                {% for error in form.password.errors %}
+                                    <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.password2.label(class="form-label") }}
+                                {{ form.password2(class="form-control" + (" is-invalid" if form.password2.errors else "")) }}
+                                {% for error in form.password2.errors %}
+                                    <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        <h5>Permisos y Puestos</h5>
+
+                        <div class="mb-3">
+                            {{ form.puestos.label(class="form-label") }}
+                            <div class="border p-2 rounded {% if form.puestos.errors %}is-invalid{% endif %}" style="max-height: 150px; overflow-y: auto;">
+                                {{ form.puestos(class="form-check-input") }}
+                            </div>
+                            {% for error in form.puestos.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="form-check mb-3">
+                            {{ form.puede_ver(class="form-check-input") }}
+                            {{ form.puede_ver.label(class="form-check-label") }}
+                        </div>
+
+                        <div class="form-check mb-3">
+                            {{ form.puede_editar(class="form-check-input") }}
+                            {{ form.puede_editar.label(class="form-check-label") }}
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-4">
                             <a href="{{ url_for('admin.list_users') }}" class="btn btn-secondary">Cancelar</a>
+                            {{ form.submit(class="btn btn-primary") }}
                         </div>
                     </form>
-                 </div>
+                </div>
             </div>
         </div>
     </div>
+</div>
 {% endblock %}
-

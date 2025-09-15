@@ -1,197 +1,199 @@
 {% extends "base.html" %}
-{% import "bootstrap_wtf.html" as wtf %}
+{# NOTA: Ya no es necesario importar 'bootstrap_wtf.html' con bootstrap-flask #}
 
 {% block content %}
+<div class="container-fluid mt-3">
     <div class="alert alert-secondary" role="alert">
-      <span style="text-transform: uppercase; text-align: center;" > <strong>LIBRO DE ACTAS {{ current_barrio }}</strong></span>
+        <h5 class="text-center mb-0"><strong>LIBRO DE ACTAS: {{ barrio_actual | upper }}</strong></h5>
     </div>
 
-    {# El `obs_form` y `search_form` serán None si el usuario no tiene permisos de visualización. #}
-    {% if obs_form is not none %} {# Si obs_form no es None, significa que tiene permisos para ver y potencialmente registrar #}
+    {% if no_puestos %}
+        <div class="alert alert-danger text-center">
+            <h4>Acceso Denegado</h4>
+            <p>No tienes puestos asignados o visibles en este barrio.</p>
+        </div>
+    {% else %}
         <div class="row">
-            <div class="col-md-5 mb-4">
-                <h4>REGISTRAR ACTA EN: {{ target_puesto }}</h4>
-                <hr>
-                {# --- Mostrar formulario de registro solo si el usuario puede registrar en el target_puesto --- #}
-                {% if can_register_in_target_puesto %}
-                    <form action="{{ url_for('main.index', puesto=target_puesto) }}" method="post" novalidate enctype="multipart/form-data">
-                        {{ obs_form.hidden_tag() }}
-                        {{ wtf.form_field(obs_form.classification) }}
-                        {{ wtf.form_field(obs_form.observation_date) }}
-                        {{ wtf.form_field(obs_form.observation_time) }}
-                        {{ wtf.form_field(obs_form.body) }}
-                        {{ wtf.form_field(obs_form.attachment) }}
-                        {{ wtf.form_field(obs_form.submit) }}
-                    </form>
-                {% else %}
-                    <div class="alert alert-success">
-                        <i class="bi bi-info-circle-fill"></i>
-                        No puedes registrar actas en el libro de este puesto.
-                        {% if not current_user.get_puestos_asignados_en_barrio(current_barrio) %}
-                            <br>No tienes puestos asignados en este barrio para registrar Actas.
+            <!-- Columna del Formulario de Registro -->
+            <div class="col-lg-5 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h4 class="mb-0">REGISTRAR ACTA EN: {{ target_puesto.nombre }}</h4>
+                    </div>
+                    <div class="card-body">
+                        {% if can_register_in_target_puesto %}
+                            <form action="{{ url_for('main.index', puesto_id=target_puesto.id) }}" method="post" novalidate enctype="multipart/form-data">
+                                {{ obs_form.hidden_tag() }}
+
+                                <!-- CAMBIO: Se renderizan los campos con la sintaxis de Bootstrap-Flask -->
+                                <div class="mb-3">
+                                    {{ obs_form.classification.label(class="form-label") }}
+                                    {{ obs_form.classification(class="form-select") }}
+                                    {% for error in obs_form.classification.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col">
+                                        {{ obs_form.observation_date.label(class="form-label") }}
+                                        {{ obs_form.observation_date(class="form-control") }}
+                                         {% for error in obs_form.observation_date.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="col">
+                                        {{ obs_form.observation_time.label(class="form-label") }}
+                                        {{ obs_form.observation_time(class="form-control") }}
+                                        {% for error in obs_form.observation_time.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    {{ obs_form.body.label(class="form-label") }}
+                                    {{ obs_form.body(class="form-control", rows=5) }}
+                                    {% for error in obs_form.body.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="mb-3">
+                                    {{ obs_form.attachment.label(class="form-label") }}
+                                    {{ obs_form.attachment(class="form-control") }}
+                                     {% for error in obs_form.attachment.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="d-grid">
+                                    {{ obs_form.submit(class="btn btn-primary btn-lg") }}
+                                </div>
+                            </form>
                         {% else %}
-                            <br>Para registrar un acta, selecciona uno de tus puestos asignados desde el menú "Libro".
+                            <div class="alert alert-info">
+                                No puedes registrar actas en el libro de este puesto.
+                            </div>
                         {% endif %}
                     </div>
-                {% endif %}
+                </div>
             </div>
 
-            <div class="col-md-7">
+            <!-- Columna del Libro de Actas -->
+            <div class="col-lg-7">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div>
-                        <h4>LIBRO DE ACTAS: {{ target_puesto }}</h4>
-                    </div>
-                    {# Menú para cambiar de Puesto (Libro) #}
+                    <h4 class="mb-0">LIBRO DE ACTAS: {{ target_puesto.nombre }}</h4>
                     <div class="dropdown">
-                        <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
-                            Ver Libro
+                        <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Cambiar Puesto
                         </button>
-                        <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
-                            {# available_puestos_for_menu ya contiene solo los puestos que el usuario puede ver #}
-                            {% for puesto_item in available_puestos_for_menu %}
-                                <li><a class="dropdown-item {% if puesto_item == target_puesto %}active{% endif %}" href="{{ url_for('main.index', puesto=puesto_item) }}">{{ puesto_item }}</a></li>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {% for puesto_item in puestos_visibles %}
+                                <li><a class="dropdown-item {% if puesto_item.id == target_puesto.id %}active{% endif %}" href="{{ url_for('main.index', puesto_id=puesto_item.id) }}">{{ puesto_item.nombre }}</a></li>
                             {% endfor %}
                         </ul>
                     </div>
                 </div>
                 <hr class="mt-0">
-
-                {# --- Mostrar formulario de búsqueda solo si search_form no es none --- #}
-                {% if search_form is not none %}
-                <form action="{{ url_for('main.index') }}" method="get" class="mb-3 row g-2 align-items-end">
-                    <input type="hidden" name="puesto" value="{{ target_puesto }}">
-                    <div class="col-md-3">
-                        {{ search_form.query(class="form-control form-control-sm", placeholder="Buscar texto...", value=search_query or '') }}
-                    </div>
-                    <div class="col-md-2">
-                        {{ search_form.start_date.label(class="form-label visually-hidden") }} {# Oculta el label para mejor UI con placeholder #}
-                        {{ search_form.start_date(class="form-control form-control-sm", type="date", placeholder="Desde") }}
-                    </div>
-                    <div class="col-md-2">
-                        {{ search_form.end_date.label(class="form-label visually-hidden") }} {# Oculta el label #}
-                        {{ search_form.end_date(class="form-control form-control-sm", type="date", placeholder="Hasta") }}
-                    </div>
-                    <div class="col-md-2 d-grid">
-                        <button type="submit" class="btn btn-outline-secondary btn-sm">Buscar</button>
-                        {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
-                            <a href="{{ url_for('main.index', puesto=target_puesto) }}" class="btn btn-outline-danger btn-sm mt-1" title="Limpiar Filtros">&times; Limpiar</a>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-3 d-grid">
-                        {# --- Botón para descargar PDF --- #}
-                        <a href="{{ url_for('main.download_libro_actas_pdf', puesto=target_puesto, query=search_query, start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}" class="btn btn-sm btn-success" target="_blank">
-                            <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
-                        </a>
-                    </div>
-                </form>
-                {% else %}
-                    <p class="text-info">No hay opciones de búsqueda y descarga disponibles.</p>
-                {% endif %} {# Fin de la condición para search_form #}
                 
-                {% set current_obs_date_str = namespace(d=None) %}
-                {% if observations %}
-                    <ul class="list-group list-group-flush">
-                        {% for obs in observations %}
-                            {# --- Usar filtro para fecha completa en español --- #}
-                            {% set obs_date_display = obs.observation_date | date_full_local_es %}
-                            {% set obs_date_compare = obs.observation_date.strftime('%Y-%m-%d') %}
-
-                            {% if current_obs_date_str.d != obs_date_compare %}
-                                <li class="list-group-item bg-light text-center p-1 mt-2 mb-1">
-                                    <strong>--- {{ obs_date_display }} ---</strong>
-                                </li>
-                                {% set current_obs_date_str.d = obs_date_compare %}
+                <ul class="list-group list-group-flush">
+                    {% for acta in actas %}
+                        <li class="list-group-item mb-2 border rounded shadow-sm p-3">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1"><strong>{{ acta.classification }}</strong></h6>
+                                <small class="text-muted"><i class="bi bi-clock"></i> {{ acta.fecha_creacion.strftime('%H:%M') }} hs</small>
+                            </div>
+                            <p class="mb-1" style="white-space: pre-wrap;">{{ acta.body }}</p>
+                            {% if acta.documento_url %}
+                            <small class="d-block mt-2">
+                                <a href="{{ url_for('main.uploaded_file', filename=acta.documento_url) }}" target="_blank" class="text-decoration-none">
+                                    <i class="bi bi-paperclip"></i> Ver adjunto: {{ acta.documento_url }}
+                                </a>
+                            </small>
                             {% endif %}
-                            <li class="list-group-item mb-2 border rounded shadow-sm">
-                               <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1"><strong>{{ obs.classification }} <small class="text-muted" title="Hora del evento"><i class="bi bi-clock-fill"></i> {{ obs.observation_time.strftime('%H:%M') }}</small></strong></h6>
-                                </div>
-                                <p class="mb-1 preserve-newlines">{{ obs.body }}</p>
-                                {% if obs.filename %}
-                                    <small class="d-block mt-1">
-                                        Adjunto:
-                                        <a href="{{ url_for('main.uploaded_file', filename=obs.filename) }}" target="_blank">
-                                            <i class="bi bi-paperclip"></i> {{ obs.filename }}
-                                        </a>
-                                        {% if obs.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
-                                            <a href="{{ url_for('main.uploaded_file', filename=obs.filename) }}" target="_blank">
-                                                <img src="{{ url_for('main.uploaded_file', filename=obs.filename) }}" alt="Adjunto" class="img-thumbnail mt-1" style="max-height: 100px; max-width: 150px; cursor: pointer;">
-                                            </a>
-                                        {% endif %}
-                                    </small>
-                                {% endif %}
-                                <div class="d-flex justify-content-end align-items-center mt-1">
-                                    <small class="text-muted me-2">Acta registrada por: {{ obs.author.nombre_completo or obs.author.dni }} el</small>
-                                    {# --- Hora de REGISTRO (local) --- #}
-                                    <small class="text-muted" title="Registrado (Local)"><i class="bi bi-calendar-check"></i> {{ obs.timestamp | datetime_local }}</small>
-                                </div>
-                            </li>
+                            <hr class="my-2">
+                            <div class="d-flex justify-content-end align-items-center">
+                                <small class="text-muted fst-italic">
+                                    <i class="bi bi-person-fill"></i> Registrado por: {{ acta.autor.nombre_completo or acta.autor.dni }} el 
+                                    <i class="bi bi-calendar-check"></i> {{ acta.fecha_creacion | date_full_local_es }}
+                                </small>
+                            </div>
+                        </li>
+                    {% else %}
+                        <div class="text-center text-muted mt-4">
+                            <i class="bi bi-journal-x" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No hay actas registradas para {{ target_puesto.nombre }}.</p>
+                        </div>
+                    {% endfor %}
+                </ul>
+
+                <!-- Paginación -->
+                {% if pagination and pagination.pages > 1 %}
+                <nav class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('main.index', puesto_id=target_puesto.id, page=pagination.prev_num) }}">Anterior</a>
+                        </li>
+                        {% for page_num in pagination.iter_pages() %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('main.index', puesto_id=target_puesto.id, page=page_num) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">…</span></li>
+                            {% endif %}
                         {% endfor %}
+                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('main.index', puesto_id=target_puesto.id, page=pagination.next_num) }}">Siguiente</a>
+                        </li>
                     </ul>
-                {% else %}
-                    <p class="text-muted text-center mt-3">
-                        {% if search_query or request.args.get('start_date') or request.args.get('end_date') %}
-                            No se encontraron Actas para los filtros aplicados en {{ target_puesto }}.
-                        {% else %}
-                            No hay Actas registradas para {{ target_puesto }} todavía.
-                        {% endif %}
-                    </p>
+                </nav>
                 {% endif %}
             </div>
         </div>
-        {# SCRIPT PARA AUTOCOMPLETAR HORA #}
-    {% if obs_form %} {# Solo cargar el script si el formulario de observación está presente #}
-        <script>
-        // 1. Convertimos el diccionario de textos de Python a un objeto JSON que JavaScript puede leer.
-        //    Esta línea es fundamental y debe estar aquí.
+    {% endif %} {# Este es el endif del 'if no_puestos' de arriba #}
+</div>
+
+{# SCRIPT PARA AUTOCOMPLETAR HORA Y MENSAJE DE ACCESO DENEGADO #}
+{% if obs_form %} {# Abrimos el bloque condicional #}
+    
+    {# Si obs_form existe, mostramos el script #}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const classificationField = document.getElementById('classification');
+            const bodyField = document.getElementById('body'); 
+            const observationTimeField = document.getElementById('observation_time');
             const predefinedTexts = {{ predefined_body_texts|tojson|safe }};
 
-    // 2. Nos aseguramos de que el script se ejecute solo cuando toda la página HTML esté cargada.
-            document.addEventListener('DOMContentLoaded', function () {
-        
-        // 3. Obtenemos una referencia a TODOS los campos que vamos a manipular.
-        //    ¡Aquí corregimos el ID de 'classification' a 'classification-field'!
-                const classificationField = document.getElementById('classification-field');
-                const bodyField = document.getElementById('body-field'); 
-                const observationTimeField = document.getElementById('observation_time');
+            let timeManuallySet = false;
+            if (observationTimeField) {
+                observationTimeField.addEventListener('change', function() { timeManuallySet = true; });
+                observationTimeField.addEventListener('focus', function() { timeManuallySet = true; });
+            }
 
-        // 4. Tu lógica para saber si el usuario cambió la hora manualmente. ¡Está muy bien!
-                let timeManuallySet = false;
-                if (observationTimeField) {
-                    observationTimeField.addEventListener('change', function() { timeManuallySet = true; });
-                    observationTimeField.addEventListener('focus', function() { timeManuallySet = true; });
-                }
+            if (classificationField && bodyField && observationTimeField) {
+                classificationField.addEventListener('change', function () {
+                    const selectedValue = this.value; 
+                    const newText = predefinedTexts[selectedValue] || '';
+                    bodyField.value = newText;
 
-        // 5. Verificamos que los 3 campos existan antes de añadir el "escuchador de eventos".
-                if (classificationField && bodyField && observationTimeField) {
-            
-            // 6. Añadimos el "escuchador" al campo de clasificación.
-                    classificationField.addEventListener('change', function () {
-                
-                
-                        const selectedValue = this.value; 
-                        const newText = predefinedTexts[selectedValue] || '';
-                        bodyField.value = newText; // Asignamos el texto al campo.
+                    if (this.value && (!timeManuallySet || observationTimeField.value === '')) {
+                        const now = new Date();
+                        const hours = String(now.getHours()).padStart(2, '0');
+                        const minutes = String(now.getMinutes()).padStart(2, '0');
+                        observationTimeField.value = `${hours}:${minutes}`;
+                    }
+                });
+            }
+        });
+    </script>
 
-                        if (this.value && (!timeManuallySet || observationTimeField.value === '')) {
-                            const now = new Date();
-                            const hours = String(now.getHours()).padStart(2, '0');
-                            const minutes = String(now.getMinutes()).padStart(2, '0');
-                            observationTimeField.value = `${hours}:${minutes}`;
-                        }
-                    });
-                }
-            });
-        </script>
-    {% endif %} {# FIN SCRIPT #}
-    {% else %} {# Este es el caso cuando obs_form es None (usuario sin permisos de visualización) #}
-        <div class="alert alert-danger text-center">
-            <h4 class="alert-heading">Acceso Denegado</h4>
-            <p>No tienes libros de actas disponibles para visualizar en este barrio. Por favor, contacta al administrador del sistema.</p>
-            <hr>
-            <p class="mb-0">Si crees que esto es un error, intenta cerrar sesión y volver a iniciarla, o comunícate con el soporte.</p>
-        </div>
-    {% endif %}
+{% else %}
+    
+    {# Si obs_form NO existe, mostramos el mensaje de error #}
+    <div class="alert alert-danger text-center mt-3">
+        <h4 class="alert-heading">Acceso Denegado</h4>
+        <p>No tienes libros de actas disponibles para visualizar en este barrio. Por favor, contacta al administrador del sistema.</p>
+        <hr>
+        <p class="mb-0">Si crees que esto es un error, intenta cerrar sesión y volver a iniciarla, o comunícate con el soporte.</p>
+    </div>
+
+{% endif %} {# Cerramos el bloque condicional aquí, al final de todo #}
 {% endblock %}
-
-

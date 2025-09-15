@@ -1,177 +1,201 @@
 # app/admin_routes.py
-from flask import Blueprint, render_template, flash, redirect, url_for, request, abort, session
+
+from flask import Blueprint, render_template, flash, redirect, url_for, request, abort
 from app import db
-# Quitar AssignUserForm
-from app.forms import EditUserForm, AdminCreateUserForm
-# Añadir UserPuestoAssignment
-from app.models import User, Observation, UserPuestoAssignment, BARRIOS, PUESTOS
+from app.forms import CreateUserForm, EditUserForm  # Usamos los formularios ya refactorizados
+from app.models import Usuario, Rol, Puesto, Barrio, PermisoPuesto, Acta
 from flask_login import current_user, login_required
-from sqlalchemy import func, and_
+from sqlalchemy import func
 from functools import wraps
 
-bp = Blueprint('admin', __name__, url_prefix='/admin')
 
-# Decorador admin_required (sin cambios)
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_barrio = session.get('current_barrio')
-        if not current_user.is_authenticated or not current_user.is_admin or not current_barrio:
-            if current_user.is_authenticated and current_user.is_admin:
-                 flash('Selecciona un barrio para administrar.', 'info'); return redirect(url_for('main.select_barrio'))
+        if not current_user.is_admin:
             abort(403)
-        if current_user.barrio != current_barrio:
-             flash(f'Tu cuenta de admin no corresponde al barrio {current_barrio}.', 'warning')
-             return redirect(url_for('main.logout'))
+        if not current_user.barrio_admin_id:
+            flash('Tu cuenta de administrador no tiene un barrio asignado para gestionar.', 'danger')
+            return redirect(url_for('main.index'))
         return f(*args, **kwargs)
     return decorated_function
 
-# Ruta para listar usuarios
-@bp.route('/users')
+@admin_bp.route('/users')
 @login_required
 @admin_required
 def list_users():
-    current_barrio = session['current_barrio']
-    users = db.session.scalars(db.select(User).where(User.barrio == current_barrio).order_by(User.nombre_completo)).all()
-    create_form = AdminCreateUserForm(current_barrio=current_barrio)
-    return render_template('admin/users.html',
-                           title=f'Admin Usuarios ({current_barrio})',
-                           users=users, create_form=create_form, current_barrio=current_barrio, UserPuestoAssignment=UserPuestoAssignment)
+    """
+    Muestra una lista de usuarios DEL BARRIO que el admin gestiona
+    y el formulario para crear uno nuevo.
+    """
+    admin_barrio_id = current_user.barrio_admin_id
+    
+    # Preparamos el formulario de creación para pasarlo a la plantilla.
+    create_form = CreateUserForm(barrio_id=admin_barrio_id)
 
-# Ruta para crear usuario 
-@bp.route('/user/create', methods=['POST'])
+    # Consulta para obtener los usuarios que tienen al menos un permiso en un puesto de este barrio.
+    puestos_del_barrio_ids = db.session.scalars(db.select(Puesto.id).where(Puesto.barrio_id == admin_barrio_id)).all()
+    
+    # Usamos la relación correcta: 'permisos'
+    user_query = db.select(Usuario).join(Usuario.permisos).where(PermisoPuesto.puesto_id.in_(puestos_del_barrio_ids)).distinct()
+    
+    page = request.args.get('page', 1, type=int)
+    pagination = db.paginate(user_query.order_by(Usuario.nombre_completo), page=page, per_page=15)
+    users = pagination.items
+    
+    return render_template('admin/users.html', 
+                           title=f'Usuarios de {current_user.barrio_admin.nombre}', 
+                           users=users, 
+                           pagination=pagination,
+                           create_form=create_form,
+                           current_barrio=current_user.barrio_admin.nombre)
+
+@admin_bp.route('/user/create', methods=['POST']) # Solo acepta POST
 @login_required
 @admin_required
 def create_user():
-    current_barrio = session['current_barrio']
-    create_form = AdminCreateUserForm(current_barrio=current_barrio)
-    if create_form.validate_on_submit():
-        print(f"DEBUG: Formulario validado. DNI: {create_form.dni.data}, Puestos: {create_form.puestos.data}")
-        user = User(
-            dni=create_form.dni.data,
-            nombre_completo=create_form.nombre_completo.data,
-            email=create_form.email.data or None,
-            barrio=current_barrio,
-            is_admin=create_form.is_admin.data,
-            can_view_all_puestos=create_form.can_view_all_puestos.data 
-            # Ya no se asigna 'zona' directamente a User
-        )
-        user.set_password(create_form.password.data)
-        db.session.add(user)
-        try:
-            db.session.flush() # Obtener user.id
-            for puesto_nombre in create_form.puestos.data:
-                assignment = UserPuestoAssignment(user_id=user.id, barrio=current_barrio, puesto=puesto_nombre, )
-                db.session.add(assignment)
-            db.session.commit()
-            print(f"DEBUG: Usuario {user.dni} y asignaciones commiteados.")
-            flash(f'Usuario DNI {user.dni} creado y asignado a puestos en {current_barrio}.', 'success')
+    """
+    Procesa la creación de un usuario y lo asigna a puestos DENTRO del barrio del admin.
+    """
+    admin_barrio_id = current_user.barrio_admin_id
+    form = CreateUserForm(barrio_id=admin_barrio_id)
+    
+    if form.validate_on_submit():
+        # Obtenemos el rol 'Usuario' por defecto para los nuevos creados.
+        rol_usuario = db.session.scalar(db.select(Rol).where(Rol.nombre == 'Usuario'))
+        if not rol_usuario:
+            # Fallback por si el rol no existe
+            flash('Error crítico: El rol "Usuario" no se encuentra en la base de datos.', 'danger')
             return redirect(url_for('admin.list_users'))
-        except Exception as e:
-             db.session.rollback()
-             # ... (manejo de errores existente) ...
-             # print(f"DEBUG: Usuario {user.dni} y asignaciones no commiteados.")
-             if 'UNIQUE constraint failed: uq_dni_barrio' in str(e): flash(f'Error: El DNI {create_form.dni.data} ya existe en {current_barrio}.', 'danger')
-             elif 'UNIQUE constraint failed: user.email' in str(e): flash('Error: El email ingresado ya existe.', 'danger')
-             else: flash(f'Error al crear usuario o asignaciones: {e}', 'danger')
-             users = db.session.scalars(db.select(User).where(User.barrio == current_barrio).order_by(User.nombre_completo)).all()
-             return render_template('admin/users.html', title=f'Admin Usuarios ({current_barrio})', users=users, create_form=create_form, current_barrio=current_barrio, UserPuestoAssignment=UserPuestoAssignment)
-    else:
-        print(f"DEBUG: Falló la validación del formulario. Errores: {create_form.errors}") # DEBUG
-        # flash('Por favor, corrige los errores en el formulario de creación.', 'warning')
-        for fieldName, errorMessages in create_form.errors.items():
-            try: label = getattr(create_form, fieldName).label.text
-            except AttributeError: label = fieldName.replace('_', ' ').title()
-            # for err in errorMessages: print(f"Error en '{label}': {err}", "danger")
-        users = db.session.scalars(db.select(User).where(User.barrio == current_barrio).order_by(User.nombre_completo)).all()
+
+        new_user = Usuario(
+            dni=form.dni.data,
+            nombre_completo=form.nombre_completo.data,
+            email=form.email.data or None,
+            rol_id=rol_usuario.id,
+            organizacion_id=current_user.organizacion_id,
+        )
+        new_user.password = form.password.data
+        db.session.add(new_user)
+        
+        # Iteramos sobre los puestos seleccionados en el formulario
+        for puesto_id in form.puestos.data:
+            # Creamos el objeto PermisoPuesto para vincular usuario, puesto y permisos
+            permiso = PermisoPuesto(
+                usuario=new_user, 
+                puesto_id=puesto_id,
+                puede_ver=form.puede_ver.data,
+                puede_editar=form.puede_editar.data
+            )
+            db.session.add(permiso)
+            
+        db.session.commit()
+        flash(f'Usuario "{new_user.nombre_completo}" creado con éxito.', 'success')
+        return redirect(url_for('admin.list_users'))
+    
+    # Si la validación falla, volvemos a renderizar la página de lista de usuarios.
+    # El formulario 'form' ahora contendrá los errores de validación, que se mostrarán en la plantilla.
+    puestos_del_barrio_ids = db.session.scalars(db.select(Puesto.id).where(Puesto.barrio_id == admin_barrio_id)).all()
+    user_query = db.select(Usuario).join(Usuario.permisos).where(PermisoPuesto.puesto_id.in_(puestos_del_barrio_ids)).distinct()
+    page = request.args.get('page', 1, type=int)
+    pagination = db.paginate(user_query.order_by(Usuario.nombre_completo), page=page, per_page=15)
+    users = pagination.items
+
+    flash('Hubo errores en el formulario. Por favor, corrígelos.', 'danger')
+    return render_template('admin/users.html', 
+                           title=f'Usuarios de {current_user.barrio_admin.nombre}', 
+                           users=users, 
+                           pagination=pagination,
+                           create_form=form, # Pasamos el formulario con errores
+                           current_barrio=current_user.barrio_admin.nombre)
 
 
-    return render_template('admin/users.html', title=f'Admin Usuarios ({current_barrio}) - Errores', users=users, create_form=create_form, current_barrio=current_barrio, UserPuestoAssignment=UserPuestoAssignment)
-
-
-# Ruta para editar usuario (Modificada para editar DNI, Nombre, Email y Puestos)
-@bp.route('/user/<int:user_id>/edit', methods=['GET', 'POST'])
+@admin_bp.route('/user/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def edit_user(user_id):
-    current_barrio_admin = session['current_barrio']
-    user_to_edit = db.session.scalar(db.select(User).where(User.id == user_id, User.barrio == current_barrio_admin))
-    if user_to_edit is None:
-        flash('Usuario no encontrado o no pertenece a este barrio.', 'danger')
-        return redirect(url_for('admin.list_users'))
+    admin_barrio_id = current_user.barrio_admin_id
+    user_to_edit = db.get_or_404(Usuario, user_id)
 
-    form = EditUserForm(user_to_edit=user_to_edit) # Pasar usuario para validación
+    # --- Verificación de Seguridad ---
+    # Nos aseguramos que el admin no pueda editar usuarios de otros barrios.
+    user_permisos_en_barrio = [p for p in user_to_edit.permisos if p.puesto.barrio_id == admin_barrio_id]
+    if not user_permisos_en_barrio and user_to_edit.rol.nombre != 'Administrador':
+        abort(403) # No tiene permisos en este barrio, no debería poder editarlo.
+
+    form = EditUserForm(original_user=user_to_edit, barrio_id=admin_barrio_id)
 
     if form.validate_on_submit():
+        # Actualizamos los datos del usuario
         user_to_edit.dni = form.dni.data
         user_to_edit.nombre_completo = form.nombre_completo.data
         user_to_edit.email = form.email.data or None
-        user_to_edit.is_admin = form.is_admin.data # Permiso de admin para este barrio/user
-        user_to_edit.can_view_all_puestos = form.can_view_all_puestos.data # Permiso para ver todos los puestos
         if form.password.data:
-             user_to_edit.set_password(form.password.data)
+            user_to_edit.password = form.password.data
 
-        # Gestionar Puestos Asignados
-        # 1. Borrar asignaciones existentes para este usuario en este barrio
-        UserPuestoAssignment.query.filter_by(user_id=user_to_edit.id, barrio=current_barrio_admin).delete()
-        # 2. Crear nuevas asignaciones basadas en el checklist
-        for puesto_nombre in form.puestos.data:
-            assignment = UserPuestoAssignment(user_id=user_to_edit.id, barrio=current_barrio_admin, puesto=puesto_nombre, )
-            db.session.add(assignment)
+        # Actualizamos los permisos: borramos los viejos y creamos los nuevos
+        # ¡Solo borramos los permisos de ESTE barrio!
+        for permiso in user_permisos_en_barrio:
+            db.session.delete(permiso)
+        
+        for puesto_id in form.puestos.data:
+            new_permiso = PermisoPuesto(
+                usuario_id=user_to_edit.id,
+                puesto_id=puesto_id,
+                puede_ver=form.puede_ver.data,
+                puede_editar=form.puede_editar.data
+            )
+            db.session.add(new_permiso)
+        
+        db.session.commit()
+        flash(f'Usuario "{user_to_edit.nombre_completo}" actualizado correctamente.', 'success')
+        return redirect(url_for('admin.list_users'))
 
-        try:
-            db.session.commit()
-            flash(f'Usuario DNI {user_to_edit.dni} actualizado correctamente.', 'success')
-            return redirect(url_for('admin.list_users'))
-        except Exception as e:
-             db.session.rollback()
-             # ... (manejo de errores existente) ...
-             if 'UNIQUE constraint failed: uq_dni_barrio' in str(e): flash(f'Error: El DNI {form.dni.data} ya existe en {current_barrio_admin}.', 'danger')
-             elif 'UNIQUE constraint failed: user.email' in str(e): flash('Error: El email ingresado ya existe para otro usuario.', 'danger')
-             else: flash(f'Error al actualizar usuario: {e}', 'danger')
     elif request.method == 'GET':
+        # Poblamos el formulario con los datos actuales del usuario
         form.dni.data = user_to_edit.dni
         form.nombre_completo.data = user_to_edit.nombre_completo
         form.email.data = user_to_edit.email
-        form.is_admin.data = user_to_edit.is_admin
-        # Precargar los puestos asignados
-        assigned_puestos = [assign.puesto for assign in user_to_edit.puestos_asignados.filter_by(barrio=current_barrio_admin).all()]
-        form.puestos.data = assigned_puestos
-        form.can_view_all_puestos.data = user_to_edit.can_view_all_puestos
+        # Pre-seleccionamos los puestos y permisos que ya tiene
+        form.puestos.data = [p.puesto_id for p in user_permisos_en_barrio]
+        if user_permisos_en_barrio:
+            # Asumimos que los permisos son consistentes para todos los puestos asignados
+            form.puede_ver.data = user_permisos_en_barrio[0].puede_ver
+            form.puede_editar.data = user_permisos_en_barrio[0].puede_editar
 
+    return render_template('admin/edit_user.html', title=f"Editar Usuario", form=form, user=user_to_edit)
 
-    return render_template('admin/edit_user.html',
-                           title=f'Editar Usuario ({current_barrio_admin})',
-                           form=form, user_to_edit=user_to_edit, current_barrio=current_barrio_admin, UserPuestoAssignment=UserPuestoAssignment)
+# --- GESTIÓN DE PUESTOS (Ahora con chequeo de plan) ---
 
-
-# Ruta para eliminar usuario (Modificada para borrar UserPuestoAssignment)
-@bp.route('/user/<int:user_id>/delete', methods=['POST'])
+@admin_bp.route('/puestos', methods=['GET', 'POST'])
 @login_required
 @admin_required
-def delete_user(user_id):
-    current_barrio = session['current_barrio']
-    user_to_delete = db.session.scalar(db.select(User).where(User.id == user_id, User.barrio == current_barrio))
-    if user_to_delete is None: flash('Usuario no encontrado o no pertenece a este barrio.', 'danger'); return redirect(url_for('admin.list_users'))
-    if user_to_delete.id == current_user.id: flash('No puedes eliminar tu propia cuenta.', 'danger'); return redirect(url_for('admin.list_users'))
-    admin_count = db.session.scalar(db.select(func.count(User.id)).where(User.is_admin == True, User.barrio == current_barrio))
-    if user_to_delete.is_admin and admin_count <= 1: flash(f'No puedes eliminar al último administrador de {current_barrio}.', 'danger'); return redirect(url_for('admin.list_users'))
-    observation_count = user_to_delete.observations.count() # Observaciones globales
-    if observation_count > 0: flash(f'No se puede eliminar al usuario DNI {user_to_delete.dni} porque tiene {observation_count} observaciones registradas.', 'danger'); return redirect(url_for('admin.list_users'))
+def manage_puestos():
+    """Gestiona los puestos DEL BARRIO del admin, si su plan lo permite."""
+    
+    # --- CHEQUEO DE PLAN ---
+    if not current_user.organizacion.plan.puede_crear_puestos:
+        flash('Tu plan de suscripción no permite gestionar puestos.', 'danger')
+        return redirect(url_for('admin.list_users'))
 
-    dni_deleted = user_to_delete.dni
-    try:
-        # Las asignaciones de puestos se borran por cascade="all, delete-orphan" en la relación User.puestos_asignados
-        db.session.delete(user_to_delete)
-        db.session.commit()
-        flash(f'Usuario DNI {dni_deleted} eliminado correctamente de {current_barrio}.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error al eliminar usuario: {e}', 'danger')
-    return redirect(url_for('admin.list_users'))
+    admin_barrio_id = current_user.barrio_admin_id
+    
+    if request.method == 'POST':
+        nombre = request.form.get('nombre')
+        if nombre:
+            # Crea el puesto dentro del barrio del admin
+            nuevo_puesto = Puesto(nombre=nombre, barrio_id=admin_barrio_id)
+            db.session.add(nuevo_puesto)
+            db.session.commit()
+            flash(f'Puesto "{nombre}" creado con éxito.', 'success')
+        return redirect(url_for('admin.manage_puestos'))
+    
+    puestos = db.session.scalars(db.select(Puesto).where(Puesto.barrio_id == admin_barrio_id).order_by(Puesto.nombre)).all()
+    return render_template('admin/manage_puestos.html', title=f"Gestionar Puestos de {current_user.barrio_admin.nombre}", puestos=puestos)
 
-
-# --- Rutas manage_assignments y delete_assignment ELIMINADAS ---
+# (Aquí irían las rutas para editar y borrar puestos, también con el chequeo de plan)
 
 
 

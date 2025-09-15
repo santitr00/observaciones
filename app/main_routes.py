@@ -1,342 +1,249 @@
 # app/main_routes.py
-import os
-from flask import (Blueprint, render_template, flash, redirect, url_for,
-                   request, current_app, abort, session, send_from_directory, make_response)
+
+from flask import (
+    render_template, flash, redirect, url_for, request, session, Blueprint, g
+)
 from app import db
-# Quitar AssignUserForm
-from app.forms import (LoginForm, ObservationForm, SearchForm,
-                       ChangePasswordForm)
-# Importar PUESTOS
-from app.models import User, Observation, PUESTOS, BARRIOS, UserPuestoAssignment
+from app.forms import LoginForm, ObservationForm, SearchForm, ChangePasswordForm
+from app.models import Usuario, Acta, Puesto, Barrio, PermisoPuesto
 from flask_login import current_user, login_user, logout_user, login_required
-from datetime import datetime, timezone, date, time
-import pytz
-from sqlalchemy import or_, func, desc, and_
-from werkzeug.utils import secure_filename
-import uuid
-from weasyprint import HTML
+from datetime import datetime
 
 
-bp = Blueprint('main', __name__)
+main_bp = Blueprint('main', __name__)
 
-def unique_filename(filename):
-    ext = filename.split('.')[-1]
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    return secure_filename(unique_name)
+# ---------------------------
+# Helpers de contexto/acceso
+# ---------------------------
 
-# Ruta para Seleccionar Barrio
-@bp.route('/select_barrio', methods=['GET', 'POST'])
-def select_barrio():
-    if current_user.is_authenticated: return redirect(url_for('main.index'))
-    if request.method == 'POST':
-        barrio = request.form.get('barrio')
-        if barrio and barrio in BARRIOS:
-            session['selected_barrio_for_login'] = barrio
-            return redirect(url_for('main.login'))
-        else: flash('Por favor, selecciona un barrio válido.', 'warning')
-    return render_template('select_barrio.html', title='Seleccionar Barrio', barrios=BARRIOS)
+def get_barrios_for_user(user):
+    """Lista de Barrios a los que un usuario tiene acceso (por permisos o por ser admin)."""
+    if user.rol.nombre == 'Super Admin':
+        return db.session.scalars(db.select(Barrio).order_by(Barrio.nombre)).all()
 
-# Ruta Login (Modificada para DNI)
-@bp.route('/login', methods=['GET', 'POST'])
+    barrios = set()
+
+    # Por permisos en puestos
+    permisos_query = (
+        db.select(Barrio)
+        .join(Puesto)
+        .join(PermisoPuesto)
+        .where(PermisoPuesto.usuario_id == user.id)
+        .distinct()
+    )
+    for b in db.session.scalars(permisos_query):
+        barrios.add(b)
+
+    # Por ser administrador de un barrio
+    if user.barrio_admin:
+        barrios.add(user.barrio_admin)
+
+    return sorted(list(barrios), key=lambda b: b.nombre)
+
+
+def ensure_barrio_access_or_403(user, barrio_id):
+    """True si el usuario puede acceder al barrio_id actual."""
+    if user.rol.nombre == 'Super Admin':
+        return True
+    return any(b.id == barrio_id for b in get_barrios_for_user(user))
+
+
+@main_bp.before_app_request
+def load_current_context():
+    """Carga el contexto de barrio elegido en `g` para fácil acceso."""
+    g.current_barrio_id = session.get('current_barrio_id')
+    g.current_barrio_nombre = session.get('current_barrio_nombre')
+
+
+# ---------------------------
+# Rutas
+# ---------------------------
+
+# Ruta 1: Login (punto de entrada)
+@main_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    if current_user.is_authenticated: return redirect(url_for('main.index'))
-    selected_barrio = session.get('selected_barrio_for_login')
-    if not selected_barrio:
-        flash('Por favor, selecciona primero el barrio.', 'info')
-        return redirect(url_for('main.select_barrio'))
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
 
     form = LoginForm()
     if form.validate_on_submit():
-        # Buscar por DNI y Barrio
-        user = db.session.scalar(
-            db.select(User).where(
-                and_(
-                    User.dni == form.dni.data, # Usar DNI
-                    User.barrio == selected_barrio
-                )
-            )
-        )
-        # Validar contraseña
-        if user is None or not user.check_password(form.password.data):
-            flash('DNI o Contraseña incorrectos para este barrio.', 'danger')
-            # Mostrar login de nuevo con el error
-        else:
-            login_user(user)
-            session['current_barrio'] = selected_barrio
-            session.pop('selected_barrio_for_login', None)
-            flash(f'Inicio de sesión exitoso para {selected_barrio}!', 'success')
-            next_page = request.args.get('next')
-            if not next_page or not next_page.startswith('/') or next_page.startswith('//'):
-                next_page = url_for('main.index')
-            return redirect(next_page)
+        user = db.session.scalar(db.select(Usuario).where(Usuario.dni == form.dni.data))
+        if user and user.verify_password(form.password.data):
+            login_user(user, remember=True)
 
-    return render_template('login.html', title=f'Login - {selected_barrio}', form=form, barrio=selected_barrio)
+            barrios_accesibles = get_barrios_for_user(user)
 
-PREDEFINED_BODY_TEXTS = {
-    "INICIO JORNADA": "Recibo la guardia al tanto de las novedades que anteceden y con el puesto laboral en condiciones. ",
-    "FIN JORNADA": "Se entrego la guardia con las novedades que anteceden y el puesto laboral en condiciones. ",
-    "INICIO CORTE DE LUZ": "Se produce un corte de energía eléctrica, sin previo aviso. Los grupos electrógenos inician correctamente. ",
-    "FIN CORTE DE LUZ": "Se restablece el servicio eléctrico de EPE. ",
-}
-# Ruta Index (Modificada)
-@bp.route('/', methods=['GET', 'POST'])
-@bp.route('/index', methods=['GET', 'POST'])
+            if len(barrios_accesibles) > 1:
+                return redirect(url_for('main.select_context'))
+            elif len(barrios_accesibles) == 1:
+                barrio = list(barrios_accesibles)[0]
+                session['current_barrio_id'] = barrio.id
+                session['current_barrio_nombre'] = barrio.nombre
+                return redirect(url_for('main.index'))
+            else:
+                # Sin barrios/puestos asignados
+                logout_user()
+                flash('No tienes ningún barrio o puesto asignado.', 'danger')
+                return redirect(url_for('main.login'))
+
+        flash('DNI o Contraseña incorrectos.', 'danger')
+    return render_template('login.html', title='Iniciar Sesión', form=form)
+
+
+# Ruta 2: Selector de Contexto (si el usuario tiene >1 barrio)
+@main_bp.route('/select_context', methods=['GET', 'POST'])
+@login_required
+def select_context():
+    barrios = get_barrios_for_user(current_user)
+
+    # Si tiene 0 o 1 barrios (y no es Super Admin), resolvemos automáticamente
+    if current_user.rol.nombre != 'Super Admin':
+        if len(barrios) == 0:
+            flash('No tienes ningún barrio asignado.', 'danger')
+            return redirect(url_for('main.logout'))
+        if len(barrios) == 1:
+            b = barrios[0]
+            session['current_barrio_id'] = b.id
+            session['current_barrio_nombre'] = b.nombre
+            return redirect(url_for('main.index'))
+
+    # Selección explícita
+    if request.method == 'POST':
+        barrio_id = request.form.get('barrio', type=int)
+        barrio_sel = db.session.get(Barrio, barrio_id)
+        if barrio_sel and any(b.id == barrio_sel.id for b in barrios):
+            session['current_barrio_id'] = barrio_sel.id
+            session['current_barrio_nombre'] = barrio_sel.nombre
+            return redirect(url_for('main.index'))
+        flash('Selección de barrio inválida.', 'danger')
+
+    return render_template('select_context.html', title='Seleccionar Contexto', barrios=barrios)
+
+
+# Ruta 3: Index (home del barrio)
+@main_bp.route('/index', methods=['GET', 'POST'])
 @login_required
 def index():
-    current_barrio = session.get('current_barrio')
-    if not current_barrio:
-        flash('Error de sesión. Por favor, inicia sesión de nuevo.', 'danger')
-        return redirect(url_for('main.logout'))
+    barrio_id = session.get('current_barrio_id')
+    barrio_nombre = session.get('current_barrio_nombre')
+    if not barrio_id:
+        return redirect(url_for('main.select_context'))
 
-    # Obtener los nombres de los puestos a los que el usuario está ASIGNADO en este barrio.
-    # Esta lista determina DÓNDE PUEDE REGISTRAR (editar) actas.
-    puestos_asignados_al_usuario_en_barrio = current_user.get_puestos_asignados_en_barrio(current_barrio)
+    # Guardas de acceso...
+    if not ensure_barrio_access_or_403(current_user, barrio_id):
+        flash('No tenés acceso a este barrio.', 'danger')
+        return redirect(url_for('main.select_context'))
 
-    # Determinar qué puestos se mostrarán en el menú desplegable (DÓNDE PUEDE VER).
-    # Si el usuario tiene el permiso 'can_view_all_puestos', verá TODOS los puestos.
-    # De lo contrario, solo verá los puestos a los que está asignado.
-    if current_user.can_view_all_puestos:
-        available_puestos_for_menu = PUESTOS
+    # Puestos visibles y editables
+    if current_user.rol.nombre == 'Super Admin' or (
+        current_user.rol.nombre == 'Administrador' and current_user.barrio_admin_id == barrio_id
+    ):
+        puestos_visibles = db.session.scalars(
+            db.select(Puesto).where(Puesto.barrio_id == barrio_id).order_by(Puesto.nombre)
+        ).all()
     else:
-        available_puestos_for_menu = puestos_asignados_al_usuario_en_barrio
+        puestos_visibles = [
+            p.puesto for p in current_user.permisos
+            if p.puede_ver and p.puesto.barrio_id == barrio_id
+        ]
 
-    # Si después de aplicar la lógica de visualización, no hay puestos disponibles para el usuario,
-    # se le informa y se le muestra una página de índice sin contenido.
-    if not available_puestos_for_menu:
-        return render_template('index.html',
-                               title=f'Libro: {current_barrio} - Sin Acceso',
-                               obs_form=None, # Deshabilita el formulario de observación
-                               search_form=None, # Deshabilita el formulario de búsqueda
-                               observations=[], # No hay observaciones que mostrar
-                               current_barrio=current_barrio,
-                               target_puesto="N/A", # No hay puesto objetivo válido
-                               available_puestos_for_menu=[], # El menú estará vacío o no se mostrará
-                               can_register_in_target_puesto=False, # No puede registrar en ningún puesto
-                               search_query="",
-                               predefined_body_texts={})
+    if not puestos_visibles:
+        return render_template('index.html', no_puestos=True, barrio_actual=barrio_nombre)
 
+    target_puesto_id = request.args.get('puesto_id', puestos_visibles[0].id, type=int)
+    target_puesto = db.session.get(Puesto, target_puesto_id) or puestos_visibles[0]
+    if target_puesto not in puestos_visibles:
+        target_puesto = puestos_visibles[0]
 
-    # Determinar el puesto actual a mostrar.
-    # Se toma el puesto de la URL o el primer puesto disponible para el usuario como predeterminado.
-    default_puesto_display = available_puestos_for_menu[0]
-    requested_puesto = request.args.get('puesto', default=default_puesto_display, type=str)
-
-    # El puesto objetivo es el solicitado si el usuario tiene permiso para VERLO.
-    # De lo contrario, se redirige al puesto por defecto que sí puede ver.
-    if requested_puesto in available_puestos_for_menu:
-        target_puesto = requested_puesto
-    else:
-        target_puesto = default_puesto_display
-        if requested_puesto != default_puesto_display: # Evitar mensaje si el default ya es el solicitado
-             flash(f'No tienes permiso para ver el libro de actas del puesto "{requested_puesto}". Mostrando puesto por defecto: "{default_puesto_display}".', 'warning')
-
-    # Determinar si el usuario PUEDE REGISTRAR ACTAS en el puesto actualmente visualizado (`target_puesto`).
-    # Esto sigue basándose EXCLUSIVAMENTE en si el puesto está en sus asignaciones directas.
-    can_register_in_target_puesto = target_puesto in puestos_asignados_al_usuario_en_barrio
-
-    obs_form = ObservationForm()
-    if request.method == 'GET' and not obs_form.observation_time.data and not obs_form.observation_date.data:
-        try:
-            local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
-            now_local = datetime.now(local_tz)
-            obs_form.observation_date.data = now_local.date()
-            obs_form.observation_time.data = now_local.time().replace(second=0, microsecond=0)
-        except Exception as e: current_app.logger.error(f"Error setting default datetime: {e}")
-
-    search_form = SearchForm(request.args, meta={'csrf': False})
-    query = request.args.get('query', '').strip()
-    start_date_str = request.args.get('start_date', '')
-    end_date_str = request.args.get('end_date', '')
-    if query: search_form.query.data = query
-    if start_date_str:
-        try: search_form.start_date.data = date.fromisoformat(start_date_str)
-        except ValueError: flash('Formato de fecha "desde" inválido.', 'warning')
-    if end_date_str:
-        try: search_form.end_date.data = date.fromisoformat(end_date_str)
-        except ValueError: flash('Formato de fecha "hasta" inválido.', 'warning')
-
-    # Procesar Registro de Observación
-    if obs_form.validate_on_submit() and request.method == 'POST':
-        # --- Validar si puede registrar en este puesto ---
-        if not can_register_in_target_puesto:
-             flash(f'No tienes permiso para registrar actas en el puesto {target_puesto}.', 'danger')
-        # --------------------------------------------
-        else:
-            filename = None
-            file = obs_form.attachment.data
-            if file:
-                try:
-                    filename = unique_filename(file.filename)
-                    upload_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-                    os.makedirs(current_app.config['UPLOAD_FOLDER'], exist_ok=True)
-                    file.save(upload_path)
-                    flash('¡Acta registrada con éxito!', 'success')
-                except Exception as e:
-                     flash(f'Error al guardar el archivo adjunto: {e}', 'danger'); filename = None
-            observation = Observation(
-                classification=obs_form.classification.data, body=obs_form.body.data,
-                observation_date=obs_form.observation_date.data, observation_time=obs_form.observation_time.data,
-                author=current_user, barrio=current_barrio, zona=target_puesto, filename=filename
-            )
-            db.session.add(observation); db.session.commit()
-            if observation.classification == "FIN JORNADA":
-                # Guardar el nombre del usuario para el mensaje flash antes de cerrar sesión
-                nombre_usuario_actual = current_user.nombre_completo 
-                
-                # Limpiar datos de sesión relevantes y cerrar la sesión del usuario
-                session.pop('current_barrio', None) # Elimina el barrio actual de la sesión
-                logout_user() # Cierra la sesión del usuario de Flask-Login
-                
-                # Mensaje flash informando al usuario
-                flash(f'FIN DE JORNADA registrado por {nombre_usuario_actual}. Tu sesión ha sido cerrada.', 'info')
-                # Redirigir a la página de selección de barrio (o login)
-                return redirect(url_for('main.select_barrio')) 
-            else:
-                # Si no es "FIN JORNADA", mostrar mensaje de éxito normal
-                flash('¡Acta registrada con éxito!', 'success')
-                return redirect(url_for('main.index', puesto=target_puesto))
-    
-    
-
-    # Obtener Observaciones
-    observations = []
-    # Solo buscar observaciones si el target_puesto es válido y está en la lista de los que el usuario puede ver
-    if target_puesto and target_puesto in available_puestos_for_menu:
-        observations_query = db.select(Observation).where(Observation.barrio == current_barrio, Observation.zona == target_puesto)
-        if query:
-            search_term = f"%{query}%"
-            observations_query = observations_query.where(or_(Observation.classification.ilike(search_term), Observation.body.ilike(search_term)))
-        if search_form.start_date.data:
-             observations_query = observations_query.where(Observation.observation_date >= search_form.start_date.data)
-        if search_form.end_date.data:
-             observations_query = observations_query.where(Observation.observation_date <= search_form.end_date.data)
-        observations = db.session.scalars(observations_query.order_by(Observation.observation_date.desc(), Observation.observation_time.desc())).all()
-
-    # available_puestos_for_menu ya se determinó arriba con la lógica de 'can_view_all_puestos'
-
-    return render_template('index.html',
-                           title=f'Libro: {current_barrio} - {target_puesto}',
-                           obs_form=obs_form,
-                           search_form=search_form,
-                           observations=observations,
-                           current_barrio=current_barrio,
-                           target_puesto=target_puesto,
-                           available_puestos_for_menu=available_puestos_for_menu, # Se pasa la lista ya filtrada
-                           can_register_in_target_puesto=can_register_in_target_puesto, # Para habilitar/deshabilitar form
-                           search_query=query,
-                           predefined_body_texts=PREDEFINED_BODY_TEXTS)
-
-
-
-@bp.route('/libro_actas/pdf')
-@login_required
-def download_libro_actas_pdf():
-    current_barrio = session.get('current_barrio')
-    if not current_barrio:
-        flash('Error de sesión.', 'danger')
-        return redirect(url_for('main.logout'))
-
-    # Obtener parámetros de filtro de la URL (los mismos que usa index)
-    requested_puesto = request.args.get('puesto', PUESTOS[0] if PUESTOS else 'Default', type=str) # Mantener como requested
-    query = request.args.get('query', '').strip()
-    start_date_str = request.args.get('start_date', '')
-    end_date_str = request.args.get('end_date', '')
-
-    # Validar que el usuario tenga permisos para descargar PDF de este puesto
-    puestos_visibles_para_usuario = current_user.get_puestos_asignados_en_barrio(current_barrio) #
-    if requested_puesto not in puestos_visibles_para_usuario: #
-        flash(f'No tienes permiso para descargar el PDF del puesto "{requested_puesto}".', 'danger') #
-        return redirect(url_for('main.index')) #
-
-    target_puesto = requested_puesto # Si pasó la validación, el requested_puesto es el target_puesto válido
-
-    # Obtener Actas Filtradas (misma lógica que en index)
-    observations_query = db.select(Observation).where(
-        Observation.barrio == current_barrio,
-        Observation.zona == target_puesto
+    puestos_editables = [
+        p.puesto for p in current_user.permisos
+        if p.puede_editar and p.puesto.barrio_id == barrio_id
+    ]
+    is_admin_of_current = (
+        current_user.rol.nombre == 'Super Admin' or
+        (current_user.rol.nombre == 'Administrador' and current_user.barrio_admin_id == barrio_id)
     )
-    if query:
-        search_term = f"%{query}%"
-        observations_query = observations_query.where(or_(Observation.classification.ilike(search_term), Observation.body.ilike(search_term)))
+    can_register_in_target_puesto = is_admin_of_current or any(
+        p.id == target_puesto.id for p in puestos_editables
+    )
 
-    start_date_obj = None
-    end_date_obj = None
-    if start_date_str:
-        try: start_date_obj = date.fromisoformat(start_date_str)
-        except ValueError: flash('Fecha "desde" inválida.', 'warning')
-    if end_date_str:
-        try: end_date_obj = date.fromisoformat(end_date_str)
-        except ValueError: flash('Fecha "hasta" inválido.', 'warning')
+    # Construir SIEMPRE el form con choices válidos (antes de validar)
+    obs_form = ObservationForm(puestos_registrables=puestos_editables)
+    search_form = SearchForm(request.args)
 
-    if start_date_obj:
-         observations_query = observations_query.where(Observation.observation_date >= start_date_obj)
-    if end_date_obj:
-         observations_query = observations_query.where(Observation.observation_date <= end_date_obj)
+    # Opcional: preseleccionar primer puesto válido en GET
+    if request.method == 'GET' and puestos_editables:
+        if obs_form.puesto.data in (None, -1):
+            obs_form.puesto.data = puestos_editables[0].id
 
-    observations = db.session.scalars(observations_query.order_by(Observation.observation_date.asc(), Observation.observation_time.asc())).all() # Ascendente para PDF
+    # --- POST de alta de acta ---
+    if request.method == 'POST' and 'submit_obs' in request.form:
+        if not can_register_in_target_puesto:
+            flash('No tenés permiso para registrar en este puesto.', 'danger')
+            return redirect(url_for('main.index', puesto_id=target_puesto.id))
 
-    # Renderizar la plantilla HTML específica para el PDF
-    html_for_pdf = render_template('libro_actas_pdf.html',
-                                   observations=observations,
-                                   barrio=current_barrio,
-                                   puesto=target_puesto,
-                                   query=query,
-                                   start_date_str=start_date_str, # Pasar strings para mostrar en PDF
-                                   end_date_str=end_date_str,
-                                   generation_time=datetime.now(pytz.timezone('America/Argentina/Buenos_Aires')))
-    try:
-        # Crear el PDF desde el HTML
-        # font_config = FontConfiguration() # Para fuentes personalizadas (avanzado)
-        pdf = HTML(string=html_for_pdf, base_url=request.base_url).write_pdf(
-            # stylesheets=[CSS(string='@page { size: A4; margin: 0.5in; }')] # Estilos de página
-        )
+        if obs_form.validate():
+            puesto_id_form = obs_form.puesto.data
+            puesto_form = db.session.get(Puesto, puesto_id_form)
+            if (not puesto_form) or (puesto_form.barrio_id != barrio_id):
+                flash('Puesto inválido.', 'danger')
+                return redirect(url_for('main.index', puesto_id=target_puesto.id))
 
-        # Crear la respuesta para descargar el PDF
-        response = make_response(pdf)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename="libro_actas_{current_barrio}_{target_puesto}_{date.today().isoformat()}.pdf"'
-        return response
-    except Exception as e:
-        current_app.logger.error(f"Error generando PDF: {e}")
-        flash("Error al generar el PDF. Por favor, intente de nuevo.", "danger")
-        # Redirigir a la página anterior o a index
-        return redirect(request.referrer or url_for('main.index', puesto=target_puesto))
+            nueva = Acta(
+                puesto_id=puesto_form.id,
+                usuario_id=current_user.id,
+                clasificacion=obs_form.classification.data,
+                cuerpo=obs_form.body.data
+            )
+            # Fecha/hora del evento si existen columnas
+            if hasattr(Acta, 'fecha_evento') and hasattr(Acta, 'hora_evento'):
+                nueva.fecha_evento = obs_form.observation_date.data
+                nueva.hora_evento = obs_form.observation_time.data
+            elif hasattr(Acta, 'fecha_hora_evento'):
+                nueva.fecha_hora_evento = datetime.combine(
+                    obs_form.observation_date.data, obs_form.observation_time.data
+                )
 
-
-# Ruta Logout
-@bp.route('/logout')
-def logout():
-    session.pop('current_barrio', None)
-    logout_user()
-    flash('Has cerrado sesión.', 'info')
-    return redirect(url_for('main.select_barrio')) # Ir a selección de barrio
-
-
-# Ruta para Cambiar Contraseña
-@bp.route('/change_password', methods=['GET', 'POST'])
-@login_required
-def change_password():
-    form = ChangePasswordForm()
-    if form.validate_on_submit():
-        if not current_user.check_password(form.current_password.data): flash('La contraseña actual es incorrecta.', 'danger')
-        elif form.current_password.data == form.new_password.data: flash('La nueva contraseña no puede ser igual a la actual.', 'warning')
-        else:
-            current_user.set_password(form.new_password.data)
+            db.session.add(nueva)
             db.session.commit()
-            flash('Tu contraseña ha sido actualizada.', 'success')
-            return redirect(url_for('main.index'))
-    return render_template('admin/change_password.html', title='Cambiar Contraseña', form=form)
+            flash('Acta registrada correctamente.', 'success')
+            return redirect(url_for('main.index', puesto_id=puesto_form.id))
+        else:
+            # Mostrar exactamente qué campos fallaron
+            for campo, errores in obs_form.errors.items():
+                for err in errores:
+                    flash(f'Error en {campo}: {err}', 'danger')
+
+    # --- GET: listados + paginación ---
+    page = request.args.get('page', 1, type=int)
+    actas_query = db.select(Acta).where(Acta.puesto_id == target_puesto.id)
+    if hasattr(Acta, 'fecha_creacion'):
+        actas_query = actas_query.order_by(Acta.fecha_creacion.desc())
+    pagination = db.paginate(actas_query, page=page, per_page=15, error_out=False)
+    actas = pagination.items
+
+    return render_template(
+        'index.html',
+        obs_form=obs_form,
+        search_form=search_form,
+        actas=actas,
+        pagination=pagination,
+        barrio_actual=barrio_nombre,
+        target_puesto=target_puesto,
+        puestos_visibles=puestos_visibles,
+        can_register_in_target_puesto=can_register_in_target_puesto,
+        predefined_body_texts={}
+    )
 
 
-# Ruta para Servir Archivos
-@bp.route('/uploads/<filename>')
+# Ruta 4: Logout
+@main_bp.route('/logout')
 @login_required
-def uploaded_file(filename):
-    try:
-        # Añadir validación de seguridad: ¿Puede este usuario ver este archivo?
-        # obs = db.session.scalar(db.select(Observation).where(Observation.filename == filename))
-        # if not obs or obs.barrio != session.get('current_barrio'):
-        #     abort(403) # O 404 para no dar pistas
-        return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
-    except FileNotFoundError:
-        abort(404)
+def logout():
+    barrio_nombre = session.get('current_barrio_nombre', 'N/A')
+    logout_user()
+    # limpiar contexto propio
+    session.pop('current_barrio_id', None)
+    session.pop('current_barrio_nombre', None)
+    flash(f'Has cerrado sesión en {barrio_nombre}.', 'info')
+    return redirect(url_for('main.login'))

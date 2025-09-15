@@ -18,7 +18,7 @@
 <body class="bg-light-beige d-flex flex-column min-vh-100">
     <nav class="navbar navbar-expand-md navbar-dark bg-primary-green fixed-top shadow-sm">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('main.index') if current_user.is_authenticated else url_for('main.select_barrio') }}">
+            <a class="navbar-brand" href="{{ url_for('main.index') if current_user.is_authenticated else url_for('main.login') }}">
                 <img src="{{ url_for('static', filename='images/home.png') }}" alt="Logo Vida Barrio">
                 Libro de Actas Digital
             </a>
@@ -41,8 +41,8 @@
                 <ul class="navbar-nav ms-auto mb-2 mb-md-0 align-items-center">
                      {% if not current_user.is_authenticated %}
                         <li class="nav-item">
-                            {# Al no estar logueado, el único botón es Iniciar Sesión, que lleva a select_barrio primero #}
-                            <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.select_barrio') }}">Iniciar Sesión</a>
+                            {# Al no estar logueado, el único botón es Iniciar Sesión, que lleva a login primero #}
+                            <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.login') }}">Iniciar Sesión</a>
                         </li>
                     {% else %}
                          <li class="nav-item dropdown">
@@ -53,7 +53,7 @@
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarUserDropdown">
                                 <li><span class="dropdown-item-text"><small>Barrio: {{ session.get('current_barrio', 'N/A') }}</small></span></li>
-                                <li><a class="dropdown-item" href="{{ url_for('main.change_password') }}"><i class="bi bi-key me-2"></i>Cambiar Contraseña</a></li>
+                                {# --- <li><a class="dropdown-item" href="{{ url_for('main.change_password') }}"><i class="bi bi-key me-2"></i>Cambiar Contraseña</a></li>--- #}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('main.logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión</a></li>
                             </ul>
